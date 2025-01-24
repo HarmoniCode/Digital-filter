@@ -46,6 +46,10 @@ class ZPlanePlotApp(QMainWindow):
         self.add_pole_button = QPushButton("Add Pole")
         self.add_pole_button.clicked.connect(self.add_pole)
         self.button_layout.addWidget(self.add_pole_button)
+        
+        self.add_conjugate_button = QPushButton("Add Conjugate")
+        self.add_conjugate_button.clicked.connect(self.canvas.add_conjugate)
+        self.button_layout.addWidget(self.add_conjugate_button)
 
         self.clear_zeros_button = QPushButton("Clear Zeros")
         self.clear_zeros_button.clicked.connect(self.canvas.clear_zeros)
@@ -81,6 +85,7 @@ class ZPlaneCanvas(FigureCanvas):
         self.selected_index = None
         self.selected = None
         self.selection_flag = None
+        self.selected_conjugate = None
         self.figure, self.ax = plt.subplots()
         super().__init__(self.figure)
         self.setParent(parent)
@@ -130,7 +135,7 @@ class ZPlaneCanvas(FigureCanvas):
     def on_click(self, event):
         if event.inaxes != self.ax:
             return
-
+            
         elif event.button == 3:
             self.delete_point(event.xdata, event.ydata)
             self.plot_z_plane()
@@ -149,11 +154,13 @@ class ZPlaneCanvas(FigureCanvas):
             if distance_zero < 0.1 and distance_zero < distance_pole:
                 self.selection_flag = 'zero'
                 self.selected = zero
+                self.selected_conjugate = zero
                 self.selected_index = i
                 return
             elif distance_pole < 0.1 and distance_pole < distance_zero:
                 self.selection_flag = 'pole'
                 self.selected = pole
+                self.selected_conjugate = pole
                 self.selected_index = i
                 return
         # if event.button == 1:
@@ -196,9 +203,21 @@ class ZPlaneCanvas(FigureCanvas):
     def add_zero(self, x, y):
         self.zeros.append(complex(x, y))
         self.plot_z_plane()
+    
 
     def add_pole(self, x, y):
         self.poles.append(complex(x, y))
+        self.plot_z_plane()
+        
+    def add_conjugate(self):
+        if self.selection_flag == 'zero':
+            zero = self.selected_conjugate
+            self.zeros.append(complex(zero.real, -zero.imag))
+
+        elif self.selection_flag == 'pole':
+            pole = self.selected_conjugate
+            self.poles.append(complex(pole.real, -pole.imag))
+
         self.plot_z_plane()
 
     def clear_zeros(self):
