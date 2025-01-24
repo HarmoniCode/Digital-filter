@@ -156,9 +156,9 @@ class ZPlaneCanvas(FigureCanvas):
                 self.selected = pole
                 self.selected_index = i
                 return
-        if event.button == 1:
-            self.zeros.append(complex(event.xdata, event.ydata))
-            self.plot_z_plane()
+        # if event.button == 1:
+        #     self.zeros.append(complex(event.xdata, event.ydata))
+        #     self.plot_z_plane()
 
     def delete_point(self, x, y):
         all_points = self.zeros + self.poles
