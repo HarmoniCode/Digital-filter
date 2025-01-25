@@ -1,43 +1,56 @@
 import sys
 from itertools import zip_longest
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QLabel, QPushButton, QHBoxLayout
+import csv
+from PyQt5.QtWidgets import (
+    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
+    QLineEdit, QLabel, QPushButton, QSplitter
+)
+from PyQt5.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT)
+    NavigationToolbar2QT as NavigationToolbar
+)
 import matplotlib.pyplot as plt
 
 
 class ZPlanePlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Z-Plane Plot")
-        self.setGeometry(100, 100, 800, 600)
+        self.setWindowTitle("Z-Plane Plot and Transfer Function")
+        self.setGeometry(100, 100, 1200, 800)
 
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
-        self.layout = QVBoxLayout(self.main_widget)
+        self.main_layout = QVBoxLayout(self.main_widget)
 
-        self.canvas = ZPlaneCanvas(self.main_widget)
-        self.layout.addWidget(NavigationToolbar2QT(self.canvas, self))
-        self.layout.addWidget(self.canvas)
+        splitter = QSplitter(Qt.Horizontal)
+        self.main_layout.addWidget(splitter)
+
+        # Left pane for Z-Plane
+        left_pane = QWidget()
+        left_layout = QVBoxLayout(left_pane)
+
+        self.z_plane_canvas = ZPlaneCanvas()
+        self.selected_conjugate = self.z_plane_canvas.selected_conjugate
+        left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
+        left_layout.addWidget(self.z_plane_canvas)
 
         self.coord_layout = QHBoxLayout()
-        self.coord_label = QLabel("Enter Coordinates (Real, imaginary):")
+        self.coord_label = QLabel("Enter Coordinates (Real, Imaginary):")
         self.coord_layout.addWidget(self.coord_label)
 
         self.x_input = QLineEdit()
-        self.x_input.setPlaceholderText("real")
+        self.x_input.setPlaceholderText("Real")
         self.coord_layout.addWidget(self.x_input)
 
         self.y_input = QLineEdit()
-        self.y_input.setPlaceholderText("imaginary")
+        self.y_input.setPlaceholderText("Imaginary")
         self.coord_layout.addWidget(self.y_input)
 
-        self.layout.addLayout(self.coord_layout)
+        left_layout.addLayout(self.coord_layout)
 
         self.button_layout = QHBoxLayout()
-        self.layout.addLayout(self.button_layout)
 
         self.add_zero_button = QPushButton("Add Zero")
         self.add_zero_button.clicked.connect(self.add_zero)
@@ -46,28 +59,81 @@ class ZPlanePlotApp(QMainWindow):
         self.add_pole_button = QPushButton("Add Pole")
         self.add_pole_button.clicked.connect(self.add_pole)
         self.button_layout.addWidget(self.add_pole_button)
-        
+
         self.add_conjugate_button = QPushButton("Add Conjugate")
-        self.add_conjugate_button.clicked.connect(self.canvas.add_conjugate)
+        self.add_conjugate_button.clicked.connect(self.z_plane_canvas.add_conjugate)
         self.button_layout.addWidget(self.add_conjugate_button)
+        self.add_conjugate_button.setDisabled(True)
 
         self.clear_zeros_button = QPushButton("Clear Zeros")
-        self.clear_zeros_button.clicked.connect(self.canvas.clear_zeros)
+        self.clear_zeros_button.clicked.connect(self.z_plane_canvas.clear_zeros)
         self.button_layout.addWidget(self.clear_zeros_button)
 
         self.clear_poles_button = QPushButton("Clear Poles")
-        self.clear_poles_button.clicked.connect(self.canvas.clear_poles)
+        self.clear_poles_button.clicked.connect(self.z_plane_canvas.clear_poles)
         self.button_layout.addWidget(self.clear_poles_button)
 
+        self.button_layout_2 = QHBoxLayout()
+
         self.clear_all_button = QPushButton("Clear All")
-        self.clear_all_button.clicked.connect(self.canvas.clear_all)
-        self.button_layout.addWidget(self.clear_all_button)
+        self.clear_all_button.clicked.connect(self.z_plane_canvas.clear_all)
+        self.button_layout_2.addWidget(self.clear_all_button)
+
+        self.switch_button = QPushButton("Switch Zeros and Poles")
+        self.switch_button.clicked.connect(self.switch_zeros_poles)
+        self.button_layout_2.addWidget(self.switch_button)
+
+        self.undo_button = QPushButton("Undo")
+        self.undo_button.clicked.connect(self.z_plane_canvas.undo)
+        self.button_layout_2.addWidget(self.undo_button)
+
+        self.redo_button = QPushButton("Redo")
+        self.redo_button.clicked.connect(self.z_plane_canvas.redo)
+        self.button_layout_2.addWidget(self.redo_button)
+
+        self.save_csv_button = QPushButton("Save as CSV")
+        self.save_csv_button.clicked.connect(self.z_plane_canvas.save_state_to_csv)
+        self.button_layout_2.addWidget(self.save_csv_button)
+
+        self.load_csv_button = QPushButton("Load from CSV")
+        self.load_csv_button.clicked.connect(self.z_plane_canvas.load_state_from_csv)
+        self.button_layout_2.addWidget(self.load_csv_button)
+
+        left_layout.addLayout(self.button_layout)
+        left_layout.addLayout(self.button_layout_2)
+        splitter.addWidget(left_pane)
+
+        # Right pane for transfer function plots
+        right_pane = QWidget()
+        right_layout = QVBoxLayout(right_pane)
+
+        self.transfer_function_canvas = TransferFunctionCanvas()
+        right_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
+        right_layout.addWidget(self.transfer_function_canvas)
+
+        splitter.addWidget(right_pane)
+        splitter.setSizes([400, 8000])
+
+        # Synchronize updates between Z-Plane and transfer function
+        self.z_plane_canvas.transfer_function_updated.connect(
+            self.transfer_function_canvas.update_transfer_function
+        )
+
+    def update_add_conjugate_button(self):
+        self.selected_conjugate = self.z_plane_canvas.selected_conjugate
+        if self.selected_conjugate is None:
+            self.add_conjugate_button.setDisabled(True)
+        else:
+            self.add_conjugate_button.setDisabled(False)
+
+    def switch_zeros_poles(self):
+        self.z_plane_canvas.switch_zeros_poles()
 
     def add_zero(self):
         try:
             x = float(self.x_input.text())
             y = float(self.y_input.text())
-            self.canvas.add_zero(x, y)
+            self.z_plane_canvas.add_zero(x, y)
         except ValueError:
             print("Invalid input. Please enter numeric values.")
 
@@ -75,22 +141,27 @@ class ZPlanePlotApp(QMainWindow):
         try:
             x = float(self.x_input.text())
             y = float(self.y_input.text())
-            self.canvas.add_pole(x, y)
+            self.z_plane_canvas.add_pole(x, y)
         except ValueError:
             print("Invalid input. Please enter numeric values.")
 
 
 class ZPlaneCanvas(FigureCanvas):
-    def __init__(self, parent=None):
-        self.selected_index = None
-        self.selected = None
-        self.selection_flag = None
+    from PyQt5.QtCore import pyqtSignal
+
+    transfer_function_updated = pyqtSignal(list, list)
+
+    def __init__(self):
         self.selected_conjugate = None
-        self.figure, self.ax = plt.subplots()
+        self.selected = None
+        self.figure, self.ax = plt.subplots(figsize=(6, 6))
         super().__init__(self.figure)
-        self.setParent(parent)
+
         self.zeros = []
         self.poles = []
+        self.undo_stack = []
+        self.redo_stack = []
+
         self.plot_z_plane()
 
         self.mpl_connect("button_press_event", self.on_click)
@@ -98,7 +169,6 @@ class ZPlaneCanvas(FigureCanvas):
         self.mpl_connect("button_release_event", self.on_release)
 
     def plot_z_plane(self):
-
         self.ax.clear()
 
         theta = np.linspace(0, 2 * np.pi, 100)
@@ -111,19 +181,9 @@ class ZPlaneCanvas(FigureCanvas):
         self.ax.set_aspect("equal", adjustable="box")
 
         if self.zeros:
-            self.ax.plot(
-                [z.real for z in self.zeros],
-                [z.imag for z in self.zeros],
-                "go",
-                label="Zeros",
-            )
+            self.ax.plot([z.real for z in self.zeros], [z.imag for z in self.zeros], "go", label="Zeros")
         if self.poles:
-            self.ax.plot(
-                [p.real for p in self.poles],
-                [p.imag for p in self.poles],
-                "rx",
-                label="Poles",
-            )
+            self.ax.plot([p.real for p in self.poles], [p.imag for p in self.poles], "rx", label="Poles")
 
         self.ax.legend()
         print("Current existing zeroes:")
@@ -131,11 +191,12 @@ class ZPlaneCanvas(FigureCanvas):
         print("Current existing poles:")
         print(self.poles)
         self.draw()
+        self.transfer_function_updated.emit(self.zeros, self.poles)
 
     def on_click(self, event):
         if event.inaxes != self.ax:
             return
-            
+
         elif event.button == 3:
             self.delete_point(event.xdata, event.ydata)
             self.plot_z_plane()
@@ -156,13 +217,16 @@ class ZPlaneCanvas(FigureCanvas):
                 self.selected = zero
                 self.selected_conjugate = zero
                 self.selected_index = i
+                self.update_plot()
                 return
             elif distance_pole < 0.1 and distance_pole < distance_zero:
                 self.selection_flag = 'pole'
                 self.selected = pole
                 self.selected_conjugate = pole
                 self.selected_index = i
+                self.update_plot()
                 return
+            # if event.button == 1:
         # if event.button == 1:
         #     self.zeros.append(complex(event.xdata, event.ydata))
         #     self.plot_z_plane()
@@ -189,10 +253,12 @@ class ZPlaneCanvas(FigureCanvas):
 
         if self.selection_flag == 'zero':
             self.selected = complex(event.xdata, event.ydata)
+            self.selected_conjugate = self.selected
             self.zeros[self.selected_index] = self.selected
 
         elif self.selection_flag == 'pole':
             self.selected = complex(event.xdata, event.ydata)
+            self.selected_conjugate = self.selected
             self.poles[self.selected_index] = self.selected
 
         self.update_plot()
@@ -200,48 +266,179 @@ class ZPlaneCanvas(FigureCanvas):
     def on_release(self, event):
         self.selected = None
 
-    def add_zero(self, x, y):
-        self.zeros.append(complex(x, y))
-        self.plot_z_plane()
-    
+    def save_state(self):
+        self.undo_stack.append((self.zeros.copy(), self.poles.copy()))
+        self.redo_stack.clear()
 
-    def add_pole(self, x, y):
-        self.poles.append(complex(x, y))
+    def undo(self):
+        if self.undo_stack:
+            self.redo_stack.append((self.zeros.copy(), self.poles.copy()))
+            self.zeros, self.poles = self.undo_stack.pop()
+            self.plot_z_plane()
+
+    def redo(self):
+        if self.redo_stack:
+            self.undo_stack.append((self.zeros.copy(), self.poles.copy()))
+            self.zeros, self.poles = self.redo_stack.pop()
+            self.plot_z_plane()
+
+    def switch_zeros_poles(self):
+        self.save_state()
+        self.zeros, self.poles = self.poles, self.zeros
         self.plot_z_plane()
-        
+
     def add_conjugate(self):
+        self.save_state()
         if self.selection_flag == 'zero':
             zero = self.selected_conjugate
             self.zeros.append(complex(zero.real, -zero.imag))
+            self.selected_conjugate = None
 
         elif self.selection_flag == 'pole':
             pole = self.selected_conjugate
             self.poles.append(complex(pole.real, -pole.imag))
+            self.selected_conjugate = None
+        self.plot_z_plane()
 
+    def add_zero(self, x, y):
+        self.save_state()
+        self.zeros.append(complex(x, y))
+        self.plot_z_plane()
+
+    def add_pole(self, x, y):
+        self.save_state()
+        self.poles.append(complex(x, y))
         self.plot_z_plane()
 
     def clear_zeros(self):
+        self.save_state()
         self.zeros = []
         self.plot_z_plane()
 
     def clear_poles(self):
+        self.save_state()
         self.poles = []
         self.plot_z_plane()
 
     def clear_all(self):
+        self.save_state()
         self.zeros = []
         self.poles = []
         self.plot_z_plane()
 
-    def update_plot(self):
+    def save_state_to_csv(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save State as CSV", "", "CSV Files (*.csv);;All Files (*)",
+                                                   options=options)
+        if file_path:
+            with open(file_path, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(['Type', 'Real', 'Imaginary'])
+                for zero in self.zeros:
+                    writer.writerow(['Zero', zero.real, zero.imag])
+                for pole in self.poles:
+                    writer.writerow(['Pole', pole.real, pole.imag])
 
+    def load_state_from_csv(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(self, "Load State from CSV", "", "CSV Files (*.csv);;All Files (*)",
+                                                   options=options)
+        if file_path:
+            with open(file_path, 'r') as file:
+                reader = csv.reader(file)
+                next(reader)  # Skip header
+                self.zeros = []
+                self.poles = []
+                for row in reader:
+                    if row[0] == 'Zero':
+                        self.zeros.append(complex(float(row[1]), float(row[2])))
+                    elif row[0] == 'Pole':
+                        self.poles.append(complex(float(row[1]), float(row[2])))
+                self.plot_z_plane()
+
+    def update_plot(self):
+        # Clear the plot and redraw the Z-plane
         self.ax.clear()
         self.plot_z_plane()
-
+        self.parent().parent().parent().parent().update_add_conjugate_button()
+        # Highlight the selected zero or pole
         if self.selection_flag == 'zero':
-            self.ax.plot(self.selected.real, self.selected.imag, "bo")
+            self.ax.plot(
+                self.selected.real, self.selected.imag,
+                "o", color="red", markersize=12, alpha=0.6, zorder=1,
+            )  # Highlight circle
+            self.ax.plot(
+                self.selected.real, self.selected.imag,
+                "go", markersize=8, zorder=2,
+            )  # Actual zero marker
+
         elif self.selection_flag == 'pole':
-            self.ax.plot(self.selected.real, self.selected.imag, "bx")
+            self.ax.plot(
+                self.selected.real, self.selected.imag,
+                "o", color="green", markersize=12, alpha=0.6, zorder=1,
+            )  # Highlight circle
+            self.ax.plot(
+                self.selected.real, self.selected.imag,
+                "rx", markersize=8, zorder=2,
+            )  # Actual pole marker
+
+        self.ax.legend()
+        self.draw()
+
+
+class TransferFunctionCanvas(FigureCanvas):
+    def __init__(self):
+        self.figure, (self.ax_mag, self.ax_phase) = plt.subplots(2, 1, figsize=(6, 6))
+        super().__init__(self.figure)
+        self.plot_initial()
+
+    def plot_initial(self):
+        self.ax_mag.set_title("Magnitude of Transfer Function")
+        self.ax_mag.set_xlabel("Frequency (rad/s)")
+        self.ax_mag.set_ylabel("Magnitude")
+        self.ax_mag.grid(True)
+
+        self.ax_phase.set_title("Phase of Transfer Function")
+        self.ax_phase.set_xlabel("Frequency (rad/s)")
+        self.ax_phase.set_ylabel("Phase (radians)")
+        self.ax_phase.grid(True)
+
+        self.draw()
+
+    def compute_transfer_function(self, zeros, poles):
+        omega = np.linspace(0, 2 * np.pi, 500)
+        z = np.exp(1j * omega)
+
+        Y_Z = np.ones_like(z, dtype=complex)
+        X_Z = np.ones_like(z, dtype=complex)
+
+        for zero in zeros:
+            Y_Z *= (z - zero)
+        for pole in poles:
+            X_Z *= (z - pole)
+
+        H = Y_Z / X_Z
+        return H, omega
+
+    def update_transfer_function(self, zeros, poles):
+        H, omega = self.compute_transfer_function(zeros, poles)
+        magnitude = np.abs(H)
+        phase = np.angle(H)
+
+        self.ax_mag.clear()
+        self.ax_phase.clear()
+
+        self.ax_mag.plot(omega, magnitude, label="|H(z)|", color="blue")
+        self.ax_mag.set_title("Magnitude of Transfer Function")
+        self.ax_mag.set_xlabel("Frequency (rad/s)")
+        self.ax_mag.set_ylabel("Magnitude")
+        self.ax_mag.grid(True)
+
+        self.ax_phase.plot(omega, phase, label="∠H(z)", color="orange")
+        self.ax_phase.set_title("Phase of Transfer Function")
+        self.ax_phase.set_xlabel("Frequency (rad/s)")
+        self.ax_phase.set_ylabel("Phase (radians)")
+        self.ax_phase.grid(True)
 
         self.draw()
 
