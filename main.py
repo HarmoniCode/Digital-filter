@@ -194,6 +194,7 @@ class ZPlaneCanvas(FigureCanvas):
         self.transfer_function_updated.emit(self.zeros, self.poles)
 
     def on_click(self, event):
+        self.save_state()
         if event.inaxes != self.ax:
             return
 
@@ -228,6 +229,7 @@ class ZPlaneCanvas(FigureCanvas):
                 return
 
     def delete_point(self, x, y):
+        self.save_state()
         all_points = self.zeros + self.poles
         if not all_points:
             return
@@ -244,6 +246,7 @@ class ZPlaneCanvas(FigureCanvas):
             return
 
     def on_drag(self, event):
+        self.save_state()
         if event.inaxes != self.ax or self.selected is None or event.button != 1:
             return
 
@@ -260,6 +263,7 @@ class ZPlaneCanvas(FigureCanvas):
         self.update_plot()
 
     def on_release(self, event):
+        self.save_state()
         self.selected = None
 
     def save_state(self):
