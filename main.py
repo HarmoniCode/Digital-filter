@@ -4,19 +4,22 @@ import numpy as np
 import csv
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLineEdit, QLabel, QPushButton, QSplitter
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT as NavigationToolbar
 )
 import matplotlib.pyplot as plt
+import pandas as pd
+import pyqtgraph as pg
 
 
 class ZPlanePlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.graphs_window = None
         self.setWindowTitle("Z-Plane Plot and Transfer Function")
         self.setGeometry(100, 100, 1200, 800)
 
@@ -27,7 +30,6 @@ class ZPlanePlotApp(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         self.main_layout.addWidget(splitter)
 
-        # Left pane for Z-Plane
         left_pane = QWidget()
         left_layout = QVBoxLayout(left_pane)
 
@@ -103,7 +105,6 @@ class ZPlanePlotApp(QMainWindow):
         left_layout.addLayout(self.button_layout_2)
         splitter.addWidget(left_pane)
 
-        # Right pane for transfer function plots
         right_pane = QWidget()
         right_layout = QVBoxLayout(right_pane)
 
@@ -114,7 +115,6 @@ class ZPlanePlotApp(QMainWindow):
         splitter.addWidget(right_pane)
         splitter.setSizes([400, 8000])
 
-        # Synchronize updates between Z-Plane and transfer function
         self.z_plane_canvas.transfer_function_updated.connect(
             self.transfer_function_canvas.update_transfer_function
         )
@@ -226,10 +226,6 @@ class ZPlaneCanvas(FigureCanvas):
                 self.selected_index = i
                 self.update_plot()
                 return
-            # if event.button == 1:
-        # if event.button == 1:
-        #     self.zeros.append(complex(event.xdata, event.ydata))
-        #     self.plot_z_plane()
 
     def delete_point(self, x, y):
         all_points = self.zeros + self.poles
@@ -346,7 +342,7 @@ class ZPlaneCanvas(FigureCanvas):
         if file_path:
             with open(file_path, 'r') as file:
                 reader = csv.reader(file)
-                next(reader)  # Skip header
+                next(reader)
                 self.zeros = []
                 self.poles = []
                 for row in reader:
@@ -357,30 +353,30 @@ class ZPlaneCanvas(FigureCanvas):
                 self.plot_z_plane()
 
     def update_plot(self):
-        # Clear the plot and redraw the Z-plane
+
         self.ax.clear()
         self.plot_z_plane()
         self.parent().parent().parent().parent().update_add_conjugate_button()
-        # Highlight the selected zero or pole
+
         if self.selection_flag == 'zero':
             self.ax.plot(
                 self.selected.real, self.selected.imag,
                 "o", color="red", markersize=12, alpha=0.6, zorder=1,
-            )  # Highlight circle
+            )
             self.ax.plot(
                 self.selected.real, self.selected.imag,
                 "go", markersize=8, zorder=2,
-            )  # Actual zero marker
+            )
 
         elif self.selection_flag == 'pole':
             self.ax.plot(
                 self.selected.real, self.selected.imag,
                 "o", color="green", markersize=12, alpha=0.6, zorder=1,
-            )  # Highlight circle
+            )
             self.ax.plot(
                 self.selected.real, self.selected.imag,
                 "rx", markersize=8, zorder=2,
-            )  # Actual pole marker
+            )
 
         self.ax.legend()
         self.draw()
@@ -391,6 +387,7 @@ class TransferFunctionCanvas(FigureCanvas):
         self.figure, (self.ax_mag, self.ax_phase) = plt.subplots(2, 1, figsize=(6, 6))
         super().__init__(self.figure)
         self.plot_initial()
+        self.z_plane_canvas = ZPlaneCanvas()
 
     def plot_initial(self):
         self.ax_mag.set_title("Magnitude of Transfer Function")
@@ -443,8 +440,102 @@ class TransferFunctionCanvas(FigureCanvas):
         self.draw()
 
 
+class GraphsWindow(QWidget):
+    def __init__(self, z_plane_canvas, parent=None):
+        super().__init__(parent)
+        self.z_plane_canvas = z_plane_canvas
+
+        self.data = None
+        self.setWindowTitle("Graphs")
+        self.resize(800, 600)
+        self.transfer_function_canvas = TransferFunctionCanvas()
+        self.input_current_index = 0
+        self.filtered_current_index = 0
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_plots)
+
+        layout = QVBoxLayout()
+
+        self.input_button = QPushButton("Load Signal")
+        self.input_button.clicked.connect(self.load_signal)
+        layout.addWidget(self.input_button)
+
+        self.temporal_resolution = QSlider(Qt.Horizontal)
+        self.temporal_resolution.setMinimum(1)
+        self.temporal_resolution.setMaximum(100)
+        self.temporal_resolution.setValue(50)
+        layout.addWidget(self.temporal_resolution)
+
+        self.input_plot = pg.PlotWidget(title="Input Signal")
+        self.input_plot.setLabel("bottom", "Time")
+        self.input_plot.setLabel("left", "Amplitude")
+        layout.addWidget(self.input_plot)
+
+        self.filtered_plot = pg.PlotWidget(title="Filtered Signal")
+        self.filtered_plot.setLabel("bottom", "Time")
+        self.filtered_plot.setLabel("left", "Amplitude")
+        layout.addWidget(self.filtered_plot)
+
+        self.third_plot = pg.PlotWidget(title="Other Graph")
+        layout.addWidget(self.third_plot)
+
+        self.setLayout(layout)
+
+    def load_signal(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select CSV File", "", "CSV Files (*.csv);;All Files (*)",
+                                                   options=options)
+
+        self.data = pd.read_csv(file_path, header=None)
+        self.input_plot.clear()
+        self.timer.start(100)
+
+    def update_plots(self):
+        self.update_input_plot()
+        self.update_filtered_plot()
+
+    def update_input_plot(self):
+        if self.data is not None and self.input_current_index < len(self.data[0]):
+            input_end_index = min(self.input_current_index + 50, len(self.data[0]))
+            time = self.data[0][self.input_current_index:input_end_index].to_numpy()
+            amplitude = self.data[1][self.input_current_index:input_end_index].to_numpy()
+            self.input_plot.plot(time, amplitude, pen="b", clear=False)
+            self.input_current_index = input_end_index
+        else:
+            self.timer.stop()
+
+    def update_filtered_plot(self):
+        if self.data is not None and self.filtered_current_index < len(self.data[0]):
+            filtered_end_index = min(self.filtered_current_index + self.temporal_resolution.value(), len(self.data[0]))
+            time = self.data[0][self.filtered_current_index:filtered_end_index].to_numpy()
+            amplitude = self.data[1].to_numpy()
+            print("Current zeroes and poles in update fil:")
+            print(self.z_plane_canvas.zeros)
+            print(self.z_plane_canvas.poles)
+            transfer_function_time = self.update_H(self.z_plane_canvas.zeros,
+                                                   self.z_plane_canvas.poles)
+
+            filtered_signal = np.convolve(amplitude, transfer_function_time, mode="same")
+            self.filtered_plot.plot(time, filtered_signal[self.filtered_current_index:filtered_end_index], pen="r",
+                                    clear=False)
+            self.filtered_current_index = filtered_end_index
+        else:
+            self.timer.stop()
+
+    def update_H(self, zeros, poles):
+        transfer_function_freq = self.transfer_function_canvas.compute_transfer_function(zeros, poles)[0]
+        transfer_function_time = np.fft.ifft(transfer_function_freq).real
+        return transfer_function_time
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     main_window = ZPlanePlotApp()
+    graphs_window = GraphsWindow(main_window.z_plane_canvas)
+    main_window.z_plane_canvas.transfer_function_updated.connect(
+        graphs_window.update_filtered_plot
+    )
     main_window.show()
+    graphs_window.show()
+
     sys.exit(app.exec_())
