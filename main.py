@@ -4,7 +4,7 @@ import numpy as np
 import csv
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
@@ -14,12 +14,30 @@ from matplotlib.backends.backend_qt5agg import (
 import matplotlib.pyplot as plt
 import pandas as pd
 import pyqtgraph as pg
+from scipy.signal import butter, cheby1, cheby2, bessel, ellip
 
 
 class ZPlanePlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.graphs_window = None
+        self.standard_filters = {
+            "Butterworth LPF": None,
+            "Butterworth HPF": None,
+            "Butterworth BPF": None,
+            "Chebyshev LPF": None,
+            "Chebyshev HPF": None,
+            "Chebyshev BPF": None,
+            "Inverse Chebyshev LPF": None,
+            "Inverse Chebyshev HPF": None,
+            "Inverse Chebyshev BPF": None,
+            "Bessel LPF": None,
+            "Bessel HPF": None,
+            "Bessel BPF": None,
+            "Elliptic LPF": None,
+            "Elliptic HPF": None,
+            "Elliptic BPF": None
+        }
         self.setWindowTitle("Z-Plane Plot and Transfer Function")
         self.setGeometry(100, 100, 1200, 800)
 
@@ -100,6 +118,20 @@ class ZPlanePlotApp(QMainWindow):
         self.load_csv_button = QPushButton("Load from CSV")
         self.load_csv_button.clicked.connect(self.z_plane_canvas.load_state_from_csv)
         self.button_layout_2.addWidget(self.load_csv_button)
+        
+        self.filter_dropdown = QComboBox()
+        self.filter_dropdown.insertItem(0, "Choose Standard Filter")
+        self.filter_dropdown.addItems([
+            "Butterworth LPF", "Butterworth HPF", "Butterworth BPF",
+            "Chebyshev LPF", "Chebyshev HPF", "Chebyshev BPF",
+            "Inverse Chebyshev LPF", "Inverse Chebyshev HPF", "Inverse Chebyshev BPF",
+            "Bessel LPF", "Bessel HPF", "Bessel BPF",
+            "Elliptic LPF", "Elliptic HPF", "Elliptic BPF"
+        ])
+        self.filter_dropdown.setCurrentIndex(0)
+        self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
+        left_layout.addWidget(self.filter_dropdown)
+
 
         left_layout.addLayout(self.button_layout)
         left_layout.addLayout(self.button_layout_2)
@@ -118,7 +150,51 @@ class ZPlanePlotApp(QMainWindow):
         self.z_plane_canvas.transfer_function_updated.connect(
             self.transfer_function_canvas.update_transfer_function
         )
+        self.create_standard_filter_library()
 
+    def create_standard_filter_library(self):
+        
+        for filter_type in self.standard_filters.keys():
+            if "Butterworth" in filter_type:
+                if "LPF" in filter_type:
+                    b, a, k = butter(N=4, Wn=0.5, btype='low', analog=False,output='zpk')
+                elif "HPF" in filter_type:
+                    b, a, k = butter(N=4, Wn=0.5, btype='high', analog=False,output='zpk')
+                elif "BPF" in filter_type:
+                    b, a, k = butter(N=4, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+            elif "Chebyshev" in filter_type:
+                if "LPF" in filter_type:
+                    b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='low', analog=False,output='zpk')
+                elif "HPF" in filter_type:
+                    b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='high', analog=False,output='zpk')
+                elif "BPF" in filter_type:
+                    b, a, k = cheby1(N=4, rp=1, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+            elif "Inverse Chebyshev" in filter_type:
+                if "LPF" in filter_type:
+                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='low', analog=False,output='zpk')
+                elif "HPF" in filter_type:
+                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='high', analog=False,output='zpk')
+                elif "BPF" in filter_type:
+                    b, a, k = cheby2(N=4, rs=40, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+            elif "Bessel" in filter_type:
+                if "LPF" in filter_type:
+                    b, a, k = bessel(N=4, Wn=0.5, btype='low', analog=False,output='zpk')
+                elif "HPF" in filter_type:
+                    b, a, k = bessel(N=4, Wn=0.5, btype='high', analog=False,output='zpk')
+                elif "BPF" in filter_type:
+                    b, a, k = bessel(N=4, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+            elif "Elliptic" in filter_type:
+                if "LPF" in filter_type:
+                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=0.5, btype='low', analog=False,output='zpk')
+                elif "HPF" in filter_type:
+                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=0.5, btype='high', analog=False,output='zpk')
+                elif "BPF" in filter_type:
+                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+            else:
+                pass
+            print(f"Filter: {b}, {a}, {k}")
+            self.standard_filters[filter_type] = (b, a)
+        
     def update_add_conjugate_button(self):
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         if self.selected_conjugate is None:
@@ -144,6 +220,16 @@ class ZPlanePlotApp(QMainWindow):
             self.z_plane_canvas.add_pole(x, y)
         except ValueError:
             print("Invalid input. Please enter numeric values.")
+    
+    def select_filter(self):
+        filter_type = self.filter_dropdown.currentText()
+        if filter_type != "Choose Standard Filter":
+            b, a = self.standard_filters[filter_type]
+            self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
+            print(f"Filter selected: {filter_type}")
+            print(f"Zeros: {self.z_plane_canvas.zeros}")
+            print(f"Poles: {self.z_plane_canvas.poles}")
+            self.z_plane_canvas.plot_z_plane()
 
 
 class ZPlaneCanvas(FigureCanvas):
