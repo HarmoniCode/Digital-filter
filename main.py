@@ -1,5 +1,7 @@
 import sys
 from itertools import zip_longest
+from scipy.signal import zpk2tf
+from jinja2 import Template
 import numpy as np
 import csv
 
@@ -124,6 +126,10 @@ class ZPlanePlotApp(QMainWindow):
         self.load_csv_button.clicked.connect(self.z_plane_canvas.load_state_from_csv)
         self.button_layout_2.addWidget(self.load_csv_button)
 
+        self.generate_code_button = QPushButton("Generate C Code")
+        self.generate_code_button.clicked.connect(self.generate_c_code)
+        self.button_layout_2.addWidget(self.generate_code_button)
+
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.insertItem(0, "Choose Standard Filter")
         self.filter_dropdown.addItems([
@@ -135,6 +141,7 @@ class ZPlanePlotApp(QMainWindow):
         self.filter_dropdown.setCurrentIndex(0)
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         left_layout.addWidget(self.filter_dropdown)
+
 
         left_layout.addLayout(self.button_layout)
         left_layout.addLayout(self.button_layout_2)
@@ -226,6 +233,73 @@ class ZPlanePlotApp(QMainWindow):
             #print(f"Zeros: {self.z_plane_canvas.zeros}")
             #print(f"Poles: {self.z_plane_canvas.poles}")
             self.z_plane_canvas.plot_z_plane()
+    def generate_c_code(self):
+        b,a = TransferFunctionCanvas.compute_transfer_function(self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
+        c_template = Template("""
+                    #include <stdio.h>
+
+                    #define N {{ num_order }}  // Order of numerator (b coefficients)
+                    #define M {{ den_order }}  // Order of denominator (a coefficients)
+
+                    // Filter coefficients
+                    double b[N+1] = { {{ b_coeffs }} };  // Numerator coefficients
+                    double a[M+1] = { {{ a_coeffs }} };  // Denominator coefficients
+
+                    // Apply filter to input signal
+                    void apply_filter(double *input, double *output, int length) {
+                        double x[N+1] = {0};  // Delay buffer for input
+                        double y[M+1] = {0};  // Delay buffer for output
+
+                        for (int n = 0; n < length; n++) {
+                            x[0] = input[n];  // Newest input sample
+
+                            // Compute output using difference equation
+                            output[n] = 0;
+                            for (int i = 0; i <= N; i++) {
+                                output[n] += b[i] * x[i];
+                            }
+                            for (int j = 1; j <= M; j++) {
+                                output[n] -= a[j] * y[j];
+                            }
+
+                            // Update delay buffers (shift values)
+                            for (int i = N; i > 0; i--) {
+                                x[i] = x[i-1];
+                            }
+                            for (int j = M; j > 0; j--) {
+                                y[j] = y[j-1];
+                            }
+
+                            y[0] = output[n];  // Store new output sample
+                        }
+                    }
+
+                    int main() {
+                        double input_signal[10] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                        double output_signal[10];
+
+                        apply_filter(input_signal, output_signal, 10);
+
+                        // Print output
+                        printf("Filtered Output: ");
+                        for (int i = 0; i < 10; i++) {
+                            printf("%f ", output_signal[i]);
+                        }
+                        printf("\\n");
+
+                        return 0;
+                    }
+                    """)
+        c_code = c_template.render(
+            num_order=len(b) - 1,
+            den_order=len(a) - 1,
+            b_coeffs=", ".join(map(str, b)),
+            a_coeffs=", ".join(map(str, a))
+        )
+
+
+
+        print(c_code)
 
 
 class ZPlaneCanvas(FigureCanvas):
@@ -310,6 +384,7 @@ class ZPlaneCanvas(FigureCanvas):
                 return
 
     def delete_point(self, x, y):
+        self.save_state()
         all_points = self.zeros + self.poles
         if not all_points:
             return
@@ -326,6 +401,7 @@ class ZPlaneCanvas(FigureCanvas):
             return
 
     def on_drag(self, event):
+
         if event.inaxes != self.ax or self.selected is None or event.button != 1:
             return
 
@@ -453,7 +529,7 @@ class ZPlaneCanvas(FigureCanvas):
         elif self.selection_flag == 'pole':
             self.ax.plot(
                 self.selected.real, self.selected.imag,
-                "o", color="green", markersize=12, alpha=0.6, zorder=1,
+                "o", color="orange", markersize=12, alpha=0.6, zorder=1,
             )
             self.ax.plot(
                 self.selected.real, self.selected.imag,
@@ -484,23 +560,33 @@ class TransferFunctionCanvas(FigureCanvas):
 
         self.draw()
 
-    def compute_transfer_function(self, zeros, poles):
-        omega = np.linspace(0, np.pi, 500)
+    def compute_transfer_function(self, c_code, zeros, poles):
+        """
+        Computes the transfer function H(z) given zeros and poles.
+        """
+        omega = np.linspace(0, np.pi, 500)  # Frequency range
         z = np.exp(1j * omega)
+
+        # Convert zero-pole representation to transfer function (B(z)/A(z))
 
         Y_Z = np.ones_like(z, dtype=complex)
         X_Z = np.ones_like(z, dtype=complex)
-
         for zero in zeros:
             Y_Z *= (z - zero)
         for pole in poles:
             X_Z *= (z - pole)
-
         H = Y_Z / X_Z
-        return H, omega
+        if c_code == True:
+           b, a = zpk2tf(zeros, poles, 1)
+           return b, a
+        else:
+           return H, omega
 
     def update_transfer_function(self, zeros, poles):
-        H, omega = self.compute_transfer_function(zeros, poles)
+        """
+        Updates the transfer function plot.
+        """
+        H, omega = self.compute_transfer_function(False, zeros, poles)
         magnitude = np.abs(H)
         phase = np.angle(H)
 
@@ -518,8 +604,8 @@ class TransferFunctionCanvas(FigureCanvas):
         self.ax_phase.set_xlabel("Frequency (rad/s)")
         self.ax_phase.set_ylabel("Phase (radians)")
         self.ax_phase.grid(True)
-
         self.draw()
+
 
 
 class GraphsWindow(QWidget):
@@ -683,9 +769,10 @@ class GraphsWindow(QWidget):
         else:
             self.timer.stop()
 
+
     def update_H(self, zeros, poles):
         """Compute the transfer function."""
-        transfer_function_freq = self.transfer_function_canvas.compute_transfer_function(zeros, poles)[0]
+        transfer_function_freq= self.transfer_function_canvas.compute_transfer_function(False, zeros, poles)[0]
         transfer_function_time = np.fft.ifft(transfer_function_freq).real
         return transfer_function_time
 
