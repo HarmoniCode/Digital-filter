@@ -188,7 +188,7 @@ class ZPlanePlotApp(QMainWindow):
                     b, a, k = ellip(N=4, rp=1, rs=40, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             else:
                 pass
-            print(f"Filter: {b}, {a}, {k}")
+            #print(f"Filter: {b}, {a}, {k}")
             self.standard_filters[filter_type] = (b, a)
 
     def update_add_conjugate_button(self):
@@ -222,9 +222,9 @@ class ZPlanePlotApp(QMainWindow):
         if filter_type != "Choose Standard Filter":
             b, a = self.standard_filters[filter_type]
             self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
-            print(f"Filter selected: {filter_type}")
-            print(f"Zeros: {self.z_plane_canvas.zeros}")
-            print(f"Poles: {self.z_plane_canvas.poles}")
+            #print(f"Filter selected: {filter_type}")
+            #print(f"Zeros: {self.z_plane_canvas.zeros}")
+            #print(f"Poles: {self.z_plane_canvas.poles}")
             self.z_plane_canvas.plot_z_plane()
 
 
@@ -268,10 +268,10 @@ class ZPlaneCanvas(FigureCanvas):
             self.ax.plot([p.real for p in self.poles], [p.imag for p in self.poles], "rx", label="Poles")
 
         self.ax.legend()
-        print("Current existing zeroes:")
-        print(self.zeros)
-        print("Current existing poles:")
-        print(self.poles)
+        #print("Current existing zeroes:")
+        #print(self.zeros)
+        #print("Current existing poles:")
+        #print(self.poles)
         self.draw()
         self.transfer_function_updated.emit(self.zeros, self.poles)
 
@@ -315,7 +315,7 @@ class ZPlaneCanvas(FigureCanvas):
             return
 
         distances = [abs(complex(x, y) - p) for p in all_points]
-        print(distances)
+        #print(distances)
         if min(distances) < 0.05:
             closest_idx = np.argmin(distances)
             if closest_idx < len(self.zeros):
@@ -624,7 +624,7 @@ class GraphsWindow(QWidget):
 
             transfer_function_time = self.update_H(self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
 
-            filtered_signal = np.convolve(amplitude, transfer_function_time, mode="same")
+            filtered_signal = np.convolve(amplitude, transfer_function_time, mode="full")
 
             filtered_signal = filtered_signal[:len(time)]
 
@@ -676,7 +676,7 @@ class GraphsWindow(QWidget):
             transfer_function_time = self.update_H(self.z_plane_canvas.zeros,
                                                    self.z_plane_canvas.poles)
 
-            filtered_signal = np.convolve(amplitude, transfer_function_time, mode="same")
+            filtered_signal = np.convolve(amplitude, transfer_function_time, mode="full")
             self.filtered_plot.plot(time, filtered_signal[self.filtered_current_index:filtered_end_index], pen="r",
                                     clear=False)
             self.filtered_current_index = filtered_end_index
