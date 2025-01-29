@@ -7,7 +7,7 @@ import csv
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QDoubleSpinBox
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox 
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
@@ -156,13 +156,6 @@ class ZPlanePlotApp(QMainWindow):
         self.filter_dropdown.setCurrentIndex(0)
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         left_layout.addWidget(self.filter_dropdown)
-        
-        self.form_dropdown = QComboBox()
-        self.form_dropdown.addItems([
-             "Cascade Form", "Direct Form II"
-        ])
-        self.form_dropdown.currentIndexChanged.connect(self.select_form)
-        left_layout.addWidget(self.form_dropdown) 
 
         self.apf_dropdown = QComboBox()
         self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
@@ -181,6 +174,15 @@ class ZPlanePlotApp(QMainWindow):
         self.a_spinbox.setSingleStep(0.1)
         self.a_spinbox.valueChanged.connect(self.update_custom_apf)  # Connect signal to slot
         left_layout.addWidget(self.a_spinbox)
+
+        
+        self.form_dropdown = QComboBox()
+        self.form_dropdown.addItems([
+             "Cascade Form", "Direct Form II"
+        ])
+        self.form_dropdown.currentIndexChanged.connect(self.select_form)
+        left_layout.addWidget(self.form_dropdown) 
+
         left_layout.addLayout(self.button_layout)
         left_layout.addLayout(self.button_layout_2)
         splitter.addWidget(left_pane)
@@ -236,10 +238,10 @@ class ZPlanePlotApp(QMainWindow):
                 pass
             self.standard_filters[filter_type] = (b, a)
     def update_custom_apf(self):
-            a = self.a_spinbox.value()
-            b, a_coeff = self.first_order_all_pass(a)
-            self.all_pass_filters["Custom APF"] = (b, a_coeff)
-        
+        a = self.a_spinbox.value()
+        b, a_coeff = self.first_order_all_pass(a)
+        self.all_pass_filters["Custom APF"] = (b, a_coeff)
+    
     def toggle_a_spinbox(self):
         if self.apf_dropdown.currentText() == "Custom APF":
             self.a_spinbox.setDisabled(False)
@@ -342,6 +344,7 @@ class ZPlanePlotApp(QMainWindow):
             print("Invalid input. Please enter numeric values.")
 
     def select_filter(self):
+        ZPlaneCanvas.save_state(self.z_plane_canvas)
         filter_type = self.filter_dropdown.currentText()
         if filter_type != "Choose Standard Filter":
             b, a = self.standard_filters[filter_type]
@@ -415,7 +418,6 @@ class ZPlanePlotApp(QMainWindow):
 
 
         print(c_code)
-
     def update_chosen_apf(self, apf_type):
             apf_type = self.apf_dropdown.currentText()
             if apf_type != "Choose All-Pass Filter":
@@ -492,17 +494,6 @@ class ZPlanePlotApp(QMainWindow):
                
     def show_cascade_form(self, b, a):
         pass
-
-
-
-
-        
-    
-
-       
-
-        
-        
 
 class ZPlaneCanvas(FigureCanvas):
     from PyQt5.QtCore import pyqtSignal
