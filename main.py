@@ -8,7 +8,7 @@ import csv
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox 
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
@@ -18,7 +18,7 @@ from matplotlib.backends.backend_qt5agg import (
 import matplotlib.pyplot as plt
 import pandas as pd
 import pyqtgraph as pg
-from scipy.signal import butter, cheby1, cheby2, bessel, ellip
+from scipy.signal import butter, cheby1, cheby2, bessel, ellip, tf2zpk
 
 
 class ZPlanePlotApp(QMainWindow):
@@ -38,6 +38,13 @@ class ZPlanePlotApp(QMainWindow):
             "Elliptic LPF": None,
             "Elliptic HPF": None,
             "Elliptic BPF": None
+        }
+        self.all_pass_filters = {
+            "Custom APF": None,
+            "All-Pass Filter 1": None,
+            "All-Pass Filter 2": None,
+            "All-Pass Filter 3": None,
+            "All-Pass Filter 4": None
         }
         self.setWindowTitle("Z-Plane Plot and Transfer Function")
         self.setGeometry(100, 100, 1200, 800)
@@ -142,6 +149,23 @@ class ZPlanePlotApp(QMainWindow):
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         left_layout.addWidget(self.filter_dropdown)
 
+        self.apf_dropdown = QComboBox()
+        self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
+        self.apf_dropdown.addItems([
+            "Custom APF", "All-Pass Filter 1", "All-Pass Filter 2", "All-Pass Filter 3", "All-Pass Filter 4"
+        ])
+        self.apf_dropdown.setCurrentIndex(0)
+        self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
+        self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
+        left_layout.addWidget(self.apf_dropdown)
+
+        self.a_spinbox = QDoubleSpinBox()
+        self.a_spinbox.setDisabled(True)
+        self.a_spinbox.setRange(0.1, 0.9)  # Set the range of values (min, max)
+        self.a_spinbox.setValue(0.1)  # Set the initial value
+        self.a_spinbox.setSingleStep(0.1)
+        self.a_spinbox.valueChanged.connect(self.update_custom_apf)  # Connect signal to slot
+        left_layout.addWidget(self.a_spinbox)
 
         left_layout.addLayout(self.button_layout)
         left_layout.addLayout(self.button_layout_2)
@@ -161,6 +185,7 @@ class ZPlanePlotApp(QMainWindow):
             self.transfer_function_canvas.update_transfer_function
         )
         self.create_standard_filter_library()
+        self.create_all_pass_filter_library()
 
     def create_standard_filter_library(self):
 
@@ -197,6 +222,85 @@ class ZPlanePlotApp(QMainWindow):
                 pass
             #print(f"Filter: {b}, {a}, {k}")
             self.standard_filters[filter_type] = (b, a)
+    def update_custom_apf(self):
+        a = self.a_spinbox.value()
+        b, a_coeff = self.first_order_all_pass(a)
+        self.all_pass_filters["Custom APF"] = (b, a_coeff)
+    
+    def toggle_a_spinbox(self):
+        if self.apf_dropdown.currentText() == "Custom APF":
+            self.a_spinbox.setDisabled(False)
+        else:
+            self.a_spinbox.setDisabled(True)
+
+    def create_all_pass_filter_library(self):
+        for APF_filter_type in self.all_pass_filters.keys():
+            if "Custom APF" in APF_filter_type:  # First-Order All-Pass Filter
+                a = 0.1
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            elif "All-Pass Filter 1" in APF_filter_type:  # Second-Order All-Pass Filter
+                a = 0.2
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            elif "All-Pass Filter 2" in APF_filter_type:  # Lattice All-Pass Filter
+                a = 0.4
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+
+            elif "All-Pass Filter 3" in APF_filter_type:  # Third-Order All-Pass Filter
+                a = 0.6
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            elif "All-Pass Filter 4" in APF_filter_type:  # Third-Order All-Pass Filter
+                a = 0.8
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            # elif "Second Order APF" in APF_filter_type:  # Second-Order All-Pass Filter
+            #     a = 0.5
+            #     b, a_coeff = self.second_order_all_pass(a)
+            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            # elif "Lattice APF" in APF_filter_type:  # Lattice All-Pass Filter
+            #     a_coeffs = [0.7, 0.5]  
+            #     b, a_coeff = self.lattice_all_pass(a_coeffs)
+            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+
+            # elif "Third Order APF" in APF_filter_type:  # Third-Order All-Pass Filter
+            #     a0, a1, a2 = 0.5, 0.7, 0.9 
+            #     b, a_coeff = self.third_order_all_pass(a0, a1, a2)
+            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+
+    def first_order_all_pass(self, a):
+        # First-order All-Pass Filter transfer function: H(z) = (z^-1 - a) / (1 - a * z^-1)
+        b = [a, -1]  # Numerator coefficients
+        a_coeff = [1, -a]  # Denominator coefficients
+        return b, a_coeff
+
+    # def second_order_all_pass(self, a):
+    #     # Second-order All-Pass Filter transfer function: H(z) = (z^-2 - 2a * z^-1 + 1) / (z^-2 + 2a * z^-1 + 1)
+    #     b = [1, -2*a, 1]
+    #     a_coeff = [1, 2*a, 1]
+    #     return b, a_coeff
+
+    # def lattice_all_pass(self, a_coeffs):
+    #     # Lattice All-Pass Filter: Cascading second-order sections
+    #     b_all, a_all = [], []
+    #     for a in a_coeffs:
+    #         b, a_coeff = self.second_order_all_pass(a)
+    #         b_all.extend(b)                 
+    #         a_all.extend(a_coeff)
+    #     return b_all, a_all
+
+    # def third_order_all_pass(self, a0, a1, a2):
+    #     # Transfer function: H(z) = (z^-3 - a2*z^-2 + a1*z^-1 - a0) / (z^-3 + a0*z^-2 + a1*z^-1 + a2)
+    #     b = [1, -a2, a1, -a0]
+    #     a_coeff = [1, a0, a1, a2]
+    #     return b, a_coeff
 
     def update_add_conjugate_button(self):
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
@@ -301,6 +405,15 @@ class ZPlanePlotApp(QMainWindow):
 
 
         print(c_code)
+
+    def update_chosen_apf(self, apf_type):
+        apf_type = self.apf_dropdown.currentText()
+        if apf_type != "Choose All-Pass Filter":
+            b, a = self.all_pass_filters[apf_type]
+            apf_zeros, apf_poles, gain = tf2zpk(b, a)
+            self.z_plane_canvas.zeros, self.z_plane_canvas.poles = apf_zeros.tolist(), apf_poles.tolist()
+            print(f"Gain of this {apf_type} filter is: {gain}")
+            self.z_plane_canvas.plot_z_plane()
 
 
 class ZPlaneCanvas(FigureCanvas):
