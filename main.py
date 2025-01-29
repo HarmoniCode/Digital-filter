@@ -118,7 +118,7 @@ class ZPlanePlotApp(QMainWindow):
         self.load_csv_button = QPushButton("Load from CSV")
         self.load_csv_button.clicked.connect(self.z_plane_canvas.load_state_from_csv)
         self.button_layout_2.addWidget(self.load_csv_button)
-        
+
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.insertItem(0, "Choose Standard Filter")
         self.filter_dropdown.addItems([
@@ -131,7 +131,6 @@ class ZPlanePlotApp(QMainWindow):
         self.filter_dropdown.setCurrentIndex(0)
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         left_layout.addWidget(self.filter_dropdown)
-
 
         left_layout.addLayout(self.button_layout)
         left_layout.addLayout(self.button_layout_2)
@@ -153,48 +152,48 @@ class ZPlanePlotApp(QMainWindow):
         self.create_standard_filter_library()
 
     def create_standard_filter_library(self):
-        
+
         for filter_type in self.standard_filters.keys():
             if "Butterworth" in filter_type:
                 if "LPF" in filter_type:
-                    b, a, k = butter(N=4, Wn=0.5, btype='low', analog=False,output='zpk')
+                    b, a, k = butter(N=4, Wn=0.5, btype='low', analog=False, output='zpk')
                 elif "HPF" in filter_type:
-                    b, a, k = butter(N=4, Wn=0.5, btype='high', analog=False,output='zpk')
+                    b, a, k = butter(N=4, Wn=0.5, btype='high', analog=False, output='zpk')
                 elif "BPF" in filter_type:
-                    b, a, k = butter(N=4, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+                    b, a, k = butter(N=4, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             elif "Chebyshev" in filter_type:
                 if "LPF" in filter_type:
-                    b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='low', analog=False,output='zpk')
+                    b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='low', analog=False, output='zpk')
                 elif "HPF" in filter_type:
-                    b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='high', analog=False,output='zpk')
+                    b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='high', analog=False, output='zpk')
                 elif "BPF" in filter_type:
-                    b, a, k = cheby1(N=4, rp=1, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+                    b, a, k = cheby1(N=4, rp=1, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             elif "Inverse Chebyshev" in filter_type:
                 if "LPF" in filter_type:
-                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='low', analog=False,output='zpk')
+                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='low', analog=False, output='zpk')
                 elif "HPF" in filter_type:
-                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='high', analog=False,output='zpk')
+                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='high', analog=False, output='zpk')
                 elif "BPF" in filter_type:
-                    b, a, k = cheby2(N=4, rs=40, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+                    b, a, k = cheby2(N=4, rs=40, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             elif "Bessel" in filter_type:
                 if "LPF" in filter_type:
-                    b, a, k = bessel(N=4, Wn=0.5, btype='low', analog=False,output='zpk')
+                    b, a, k = bessel(N=4, Wn=0.5, btype='low', analog=False, output='zpk')
                 elif "HPF" in filter_type:
-                    b, a, k = bessel(N=4, Wn=0.5, btype='high', analog=False,output='zpk')
+                    b, a, k = bessel(N=4, Wn=0.5, btype='high', analog=False, output='zpk')
                 elif "BPF" in filter_type:
-                    b, a, k = bessel(N=4, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+                    b, a, k = bessel(N=4, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             elif "Elliptic" in filter_type:
                 if "LPF" in filter_type:
-                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=0.5, btype='low', analog=False,output='zpk')
+                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=0.5, btype='low', analog=False, output='zpk')
                 elif "HPF" in filter_type:
-                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=0.5, btype='high', analog=False,output='zpk')
+                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=0.5, btype='high', analog=False, output='zpk')
                 elif "BPF" in filter_type:
-                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=[0.3, 0.7], btype='band', analog=False,output='zpk')
+                    b, a, k = ellip(N=4, rp=1, rs=40, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             else:
                 pass
             print(f"Filter: {b}, {a}, {k}")
             self.standard_filters[filter_type] = (b, a)
-        
+
     def update_add_conjugate_button(self):
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         if self.selected_conjugate is None:
@@ -220,7 +219,7 @@ class ZPlanePlotApp(QMainWindow):
             self.z_plane_canvas.add_pole(x, y)
         except ValueError:
             print("Invalid input. Please enter numeric values.")
-    
+
     def select_filter(self):
         filter_type = self.filter_dropdown.currentText()
         if filter_type != "Choose Standard Filter":
@@ -489,7 +488,7 @@ class TransferFunctionCanvas(FigureCanvas):
         self.draw()
 
     def compute_transfer_function(self, zeros, poles):
-        omega = np.linspace(0, 2 * np.pi, 500)
+        omega = np.linspace(0, np.pi, 500)
         z = np.exp(1j * omega)
 
         Y_Z = np.ones_like(z, dtype=complex)
@@ -593,8 +592,8 @@ class GraphsWindow(QWidget):
 
         self.setLayout(main_layout)
 
-#########################################################################################################################################################################
-#Mouse Plotting
+    #########################################################################################################################################################################
+    #Mouse Plotting
     def toggle_input_mode(self):
         """Enable or disable the upload button and reset the input mode."""
         if self.radio_csv.isChecked():
@@ -648,7 +647,7 @@ class GraphsWindow(QWidget):
             self.input_plot.clear()
             self.input_plot.plot(time, self.mouse_signal, pen="g")
 
-#########################################################################################################################################################################
+    #########################################################################################################################################################################
     def load_signal(self):
         """Load a signal from a CSV file."""
         options = QFileDialog.Options()
@@ -668,7 +667,7 @@ class GraphsWindow(QWidget):
     def update_input_plot(self):
         """Update the input plot with data from the CSV file."""
         if self.data is not None and self.input_current_index < len(self.data[0]):
-            input_end_index = min(self.input_current_index + 50, len(self.data[0]))
+            input_end_index = min(self.input_current_index + self.temporal_resolution.value(), len(self.data[0]))
             time = self.data[0][self.input_current_index:input_end_index].to_numpy()
             amplitude = self.data[1][self.input_current_index:input_end_index].to_numpy()
             self.input_plot.plot(time, amplitude, pen="b", clear=False)
