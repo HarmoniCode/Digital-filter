@@ -56,8 +56,8 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         left_frame=QFrame()
         left_layout=QHBoxLayout(left_frame)
 
-        local_left_pane = QWidget()
-        local_left_layout = QVBoxLayout(local_left_pane)
+        local_left_frame = QFrame()
+        local_left_layout = QVBoxLayout(local_left_frame)
 
         upper_layout = QHBoxLayout()
         local_left_layout.addLayout(upper_layout)
@@ -187,7 +187,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         # left_layout.addLayout(self.button_layout)
         # left_layout.addLayout(self.button_layout_2)
         splitter.addWidget(left_frame)
-        splitter.addWidget(local_left_pane)
+        splitter.addWidget(local_left_frame)
 
         # right_pane = QWidget()
         # right_layout = QVBoxLayout(right_pane)
@@ -196,7 +196,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         # local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
         local_left_layout.addWidget(self.transfer_function_canvas)
 
-        splitter.addWidget(local_left_pane)
+        splitter.addWidget(local_left_frame)
         splitter.setSizes([400, 8000])
 
         self.z_plane_canvas.transfer_function_updated.connect(
