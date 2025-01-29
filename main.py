@@ -373,6 +373,7 @@ class ZPlaneCanvas(FigureCanvas):
                 self.selected = zero
                 self.selected_conjugate = zero
                 self.selected_index = i
+                self.save_state()  # Save state before dragging
                 self.update_plot()
                 return
             elif distance_pole < 0.1 and distance_pole < distance_zero:
@@ -380,6 +381,7 @@ class ZPlaneCanvas(FigureCanvas):
                 self.selected = pole
                 self.selected_conjugate = pole
                 self.selected_index = i
+                self.save_state()  # Save state before dragging
                 self.update_plot()
                 return
 
@@ -418,6 +420,8 @@ class ZPlaneCanvas(FigureCanvas):
         self.update_plot()
 
     def on_release(self, event):
+        if self.selected is not None:
+            self.save_state()  # Save state after dragging
         self.selected = None
 
     def save_state(self):
