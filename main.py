@@ -7,7 +7,7 @@ import csv
 
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
-    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
+    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,QFrame,
     QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox 
 )
 from PyQt5.QtCore import Qt, QTimer
@@ -21,7 +21,7 @@ import pyqtgraph as pg
 from scipy.signal import butter, cheby1, cheby2, bessel, ellip, tf2zpk
 
 
-class ZPlanePlotApp(QMainWindow):
+class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
     def __init__(self):
         super().__init__()
         self.graphs_window = None
@@ -49,20 +49,20 @@ class ZPlanePlotApp(QMainWindow):
         self.setWindowTitle("Z-Plane Plot and Transfer Function")
         self.setGeometry(100, 100, 1200, 800)
 
-        self.main_widget = QWidget()
-        self.setCentralWidget(self.main_widget)
-        self.main_layout = QVBoxLayout(self.main_widget)
-
+        self.main_layout = QVBoxLayout(self)
         splitter = QSplitter(Qt.Horizontal)
         self.main_layout.addWidget(splitter)
 
-        left_pane = QWidget()
-        left_layout = QVBoxLayout(left_pane)
+        left_frame=QFrame()
+        left_layout=QHBoxLayout(left_frame)
+
+        local_left_pane = QWidget()
+        local_left_layout = QVBoxLayout(local_left_pane)
 
         self.z_plane_canvas = ZPlaneCanvas()
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
-        left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
-        left_layout.addWidget(self.z_plane_canvas)
+        # left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
+        local_left_layout.addWidget(self.z_plane_canvas)
 
         self.coord_layout = QHBoxLayout()
         self.coord_label = QLabel("Enter Coordinates (Real, Imaginary):")
@@ -82,60 +82,63 @@ class ZPlanePlotApp(QMainWindow):
         self.y_input.setToolTip("Value must be between -1.5 and 1.5")
         self.coord_layout.addWidget(self.y_input)
 
-        left_layout.addLayout(self.coord_layout)
+        local_left_layout.addLayout(self.coord_layout)
 
-        self.button_layout = QHBoxLayout()
+        self.buttons_layout = QVBoxLayout()
+        
+
+        # self.button_layout = QHBoxLayout()
 
         self.add_zero_button = QPushButton("Add Zero")
         self.add_zero_button.clicked.connect(self.add_zero)
-        self.button_layout.addWidget(self.add_zero_button)
+        self.buttons_layout.addWidget(self.add_zero_button)
 
         self.add_pole_button = QPushButton("Add Pole")
         self.add_pole_button.clicked.connect(self.add_pole)
-        self.button_layout.addWidget(self.add_pole_button)
+        self.buttons_layout.addWidget(self.add_pole_button)
 
         self.add_conjugate_button = QPushButton("Add Conjugate")
         self.add_conjugate_button.clicked.connect(self.z_plane_canvas.add_conjugate)
-        self.button_layout.addWidget(self.add_conjugate_button)
+        self.buttons_layout.addWidget(self.add_conjugate_button)
         self.add_conjugate_button.setDisabled(True)
 
         self.clear_zeros_button = QPushButton("Clear Zeros")
         self.clear_zeros_button.clicked.connect(self.z_plane_canvas.clear_zeros)
-        self.button_layout.addWidget(self.clear_zeros_button)
+        self.buttons_layout.addWidget(self.clear_zeros_button)
 
         self.clear_poles_button = QPushButton("Clear Poles")
         self.clear_poles_button.clicked.connect(self.z_plane_canvas.clear_poles)
-        self.button_layout.addWidget(self.clear_poles_button)
+        self.buttons_layout.addWidget(self.clear_poles_button)
 
         self.button_layout_2 = QHBoxLayout()
 
         self.clear_all_button = QPushButton("Clear All")
         self.clear_all_button.clicked.connect(self.z_plane_canvas.clear_all)
-        self.button_layout_2.addWidget(self.clear_all_button)
+        self.buttons_layout.addWidget(self.clear_all_button)
 
         self.switch_button = QPushButton("Switch Zeros and Poles")
         self.switch_button.clicked.connect(self.switch_zeros_poles)
-        self.button_layout_2.addWidget(self.switch_button)
+        self.buttons_layout.addWidget(self.switch_button)
 
         self.undo_button = QPushButton("Undo")
         self.undo_button.clicked.connect(self.z_plane_canvas.undo)
-        self.button_layout_2.addWidget(self.undo_button)
+        self.buttons_layout.addWidget(self.undo_button)
 
         self.redo_button = QPushButton("Redo")
         self.redo_button.clicked.connect(self.z_plane_canvas.redo)
-        self.button_layout_2.addWidget(self.redo_button)
+        self.buttons_layout.addWidget(self.redo_button)
 
         self.save_csv_button = QPushButton("Save as CSV")
         self.save_csv_button.clicked.connect(self.z_plane_canvas.save_state_to_csv)
-        self.button_layout_2.addWidget(self.save_csv_button)
+        self.buttons_layout.addWidget(self.save_csv_button)
 
         self.load_csv_button = QPushButton("Load from CSV")
         self.load_csv_button.clicked.connect(self.z_plane_canvas.load_state_from_csv)
-        self.button_layout_2.addWidget(self.load_csv_button)
+        self.buttons_layout.addWidget(self.load_csv_button)
 
         self.generate_code_button = QPushButton("Generate C Code")
         self.generate_code_button.clicked.connect(self.generate_c_code)
-        self.button_layout_2.addWidget(self.generate_code_button)
+        self.buttons_layout.addWidget(self.generate_code_button)
 
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.insertItem(0, "Choose Standard Filter")
@@ -147,7 +150,7 @@ class ZPlanePlotApp(QMainWindow):
         ])
         self.filter_dropdown.setCurrentIndex(0)
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
-        left_layout.addWidget(self.filter_dropdown)
+        local_left_layout.addWidget(self.filter_dropdown)
 
         self.apf_dropdown = QComboBox()
         self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
@@ -157,7 +160,7 @@ class ZPlanePlotApp(QMainWindow):
         self.apf_dropdown.setCurrentIndex(0)
         self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
         self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
-        left_layout.addWidget(self.apf_dropdown)
+        local_left_layout.addWidget(self.apf_dropdown)
 
         self.a_spinbox = QDoubleSpinBox()
         self.a_spinbox.setDisabled(True)
@@ -165,20 +168,23 @@ class ZPlanePlotApp(QMainWindow):
         self.a_spinbox.setValue(0.1)  # Set the initial value
         self.a_spinbox.setSingleStep(0.1)
         self.a_spinbox.valueChanged.connect(self.update_custom_apf)  # Connect signal to slot
-        left_layout.addWidget(self.a_spinbox)
+        local_left_layout.addWidget(self.a_spinbox)
 
-        left_layout.addLayout(self.button_layout)
-        left_layout.addLayout(self.button_layout_2)
-        splitter.addWidget(left_pane)
+        left_layout.addLayout(self.buttons_layout)
+        left_layout.addLayout(local_left_layout)
+        # left_layout.addLayout(self.button_layout)
+        # left_layout.addLayout(self.button_layout_2)
+        splitter.addWidget(left_frame)
+        splitter.addWidget(local_left_pane)
 
-        right_pane = QWidget()
-        right_layout = QVBoxLayout(right_pane)
+        # right_pane = QWidget()
+        # right_layout = QVBoxLayout(right_pane)
 
         self.transfer_function_canvas = TransferFunctionCanvas()
-        right_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
-        right_layout.addWidget(self.transfer_function_canvas)
+        local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
+        local_left_layout.addWidget(self.transfer_function_canvas)
 
-        splitter.addWidget(right_pane)
+        splitter.addWidget(local_left_pane)
         splitter.setSizes([400, 8000])
 
         self.z_plane_canvas.transfer_function_updated.connect(
@@ -895,14 +901,27 @@ class GraphsWindow(QWidget):
         return transfer_function_time
 
 
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Main Window")
+        self.setGeometry(100, 100, 1600, 900)
+
+        self.main_widget = QWidget()
+        self.setCentralWidget(self.main_widget)
+        self.main_layout = QVBoxLayout(self.main_widget)
+
+        self.z_plane_plot_app = ZPlanePlotApp()
+        self.graphs_window = GraphsWindow(self.z_plane_plot_app.z_plane_canvas)
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.addWidget(self.z_plane_plot_app)
+        splitter.addWidget(self.graphs_window)
+
+        self.main_layout.addWidget(splitter)
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    main_window = ZPlanePlotApp()
-    graphs_window = GraphsWindow(main_window.z_plane_canvas)
-    main_window.z_plane_canvas.transfer_function_updated.connect(
-        graphs_window.update_filtered_plot
-    )
+    main_window = MainWindow()
     main_window.show()
-    graphs_window.show()
-
     sys.exit(app.exec_())
