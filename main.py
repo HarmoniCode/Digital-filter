@@ -225,6 +225,7 @@ class ZPlanePlotApp(QMainWindow):
             print("Invalid input. Please enter numeric values.")
 
     def select_filter(self):
+        ZPlaneCanvas.save_state(self.z_plane_canvas)
         filter_type = self.filter_dropdown.currentText()
         if filter_type != "Choose Standard Filter":
             b, a = self.standard_filters[filter_type]
