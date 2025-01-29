@@ -2,6 +2,8 @@ import sys
 from itertools import zip_longest
 import numpy as np
 import csv
+
+from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
     QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox
@@ -28,9 +30,6 @@ class ZPlanePlotApp(QMainWindow):
             "Chebyshev LPF": None,
             "Chebyshev HPF": None,
             "Chebyshev BPF": None,
-            "Inverse Chebyshev LPF": None,
-            "Inverse Chebyshev HPF": None,
-            "Inverse Chebyshev BPF": None,
             "Bessel LPF": None,
             "Bessel HPF": None,
             "Bessel BPF": None,
@@ -60,12 +59,18 @@ class ZPlanePlotApp(QMainWindow):
         self.coord_label = QLabel("Enter Coordinates (Real, Imaginary):")
         self.coord_layout.addWidget(self.coord_label)
 
+        validator = QDoubleValidator(-1.5, 1.5, 2, self)
+        validator.setNotation(QDoubleValidator.StandardNotation)
         self.x_input = QLineEdit()
         self.x_input.setPlaceholderText("Real")
+        self.x_input.setValidator(validator)
+        self.x_input.setToolTip("Value must be between -1.5 and 1.5")
         self.coord_layout.addWidget(self.x_input)
 
         self.y_input = QLineEdit()
         self.y_input.setPlaceholderText("Imaginary")
+        self.y_input.setValidator(validator)
+        self.y_input.setToolTip("Value must be between -1.5 and 1.5")
         self.coord_layout.addWidget(self.y_input)
 
         left_layout.addLayout(self.coord_layout)
@@ -124,7 +129,6 @@ class ZPlanePlotApp(QMainWindow):
         self.filter_dropdown.addItems([
             "Butterworth LPF", "Butterworth HPF", "Butterworth BPF",
             "Chebyshev LPF", "Chebyshev HPF", "Chebyshev BPF",
-            "Inverse Chebyshev LPF", "Inverse Chebyshev HPF", "Inverse Chebyshev BPF",
             "Bessel LPF", "Bessel HPF", "Bessel BPF",
             "Elliptic LPF", "Elliptic HPF", "Elliptic BPF"
         ])
@@ -168,13 +172,6 @@ class ZPlanePlotApp(QMainWindow):
                     b, a, k = cheby1(N=4, rp=1, Wn=0.5, btype='high', analog=False, output='zpk')
                 elif "BPF" in filter_type:
                     b, a, k = cheby1(N=4, rp=1, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
-            elif "Inverse Chebyshev" in filter_type:
-                if "LPF" in filter_type:
-                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='low', analog=False, output='zpk')
-                elif "HPF" in filter_type:
-                    b, a, k = cheby2(N=4, rs=40, Wn=0.5, btype='high', analog=False, output='zpk')
-                elif "BPF" in filter_type:
-                    b, a, k = cheby2(N=4, rs=40, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             elif "Bessel" in filter_type:
                 if "LPF" in filter_type:
                     b, a, k = bessel(N=4, Wn=0.5, btype='low', analog=False, output='zpk')
