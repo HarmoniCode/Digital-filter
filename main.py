@@ -1,6 +1,5 @@
 import sys
 from itertools import zip_longest
-from scipy.signal import zpk2tf
 from jinja2 import Template
 import numpy as np
 import csv
@@ -8,7 +7,7 @@ import csv
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QDoubleSpinBox
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
@@ -18,13 +17,16 @@ from matplotlib.backends.backend_qt5agg import (
 import matplotlib.pyplot as plt
 import pandas as pd
 import pyqtgraph as pg
-from scipy.signal import butter, cheby1, cheby2, bessel, ellip
+from scipy.signal import butter, cheby1, bessel, ellip, tf2zpk, zpk2tf
 
 
 class ZPlanePlotApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.graphs_window = None
+        self.fig, self.ax = plt.subplots(figsize=(4, 4))
+        self.ax.axis('off')
+
         self.standard_filters = {
             "Butterworth LPF": None,
             "Butterworth HPF": None,
@@ -38,6 +40,13 @@ class ZPlanePlotApp(QMainWindow):
             "Elliptic LPF": None,
             "Elliptic HPF": None,
             "Elliptic BPF": None
+        }
+        self.all_pass_filters = {
+            "Custom APF": None,
+            "All-Pass Filter 1": None,
+            "All-Pass Filter 2": None,
+            "All-Pass Filter 3": None,
+            "All-Pass Filter 4": None
         }
         self.setWindowTitle("Z-Plane Plot and Transfer Function")
         self.setGeometry(100, 100, 1200, 800)
@@ -56,7 +65,13 @@ class ZPlanePlotApp(QMainWindow):
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
         left_layout.addWidget(self.z_plane_canvas)
-
+##################
+        self.direct_form_ii_widget = QWidget()
+        self.direct_form_ii_layout = QVBoxLayout(self.direct_form_ii_widget)
+        self.form_canvas = FigureCanvas(self.fig)
+        self.direct_form_ii_layout.addWidget(self.form_canvas)
+        left_layout.addWidget(self.direct_form_ii_widget)
+###############
         self.coord_layout = QHBoxLayout()
         self.coord_label = QLabel("Enter Coordinates (Real, Imaginary):")
         self.coord_layout.addWidget(self.coord_label)
@@ -141,8 +156,31 @@ class ZPlanePlotApp(QMainWindow):
         self.filter_dropdown.setCurrentIndex(0)
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         left_layout.addWidget(self.filter_dropdown)
+        
+        self.form_dropdown = QComboBox()
+        self.form_dropdown.addItems([
+             "Cascade Form", "Direct Form II"
+        ])
+        self.form_dropdown.currentIndexChanged.connect(self.select_form)
+        left_layout.addWidget(self.form_dropdown) 
 
+        self.apf_dropdown = QComboBox()
+        self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
+        self.apf_dropdown.addItems([
+            "Custom APF", "All-Pass Filter 1", "All-Pass Filter 2", "All-Pass Filter 3", "All-Pass Filter 4"
+        ])
+        self.apf_dropdown.setCurrentIndex(0)
+        self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
+        self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
+        left_layout.addWidget(self.apf_dropdown)
 
+        self.a_spinbox = QDoubleSpinBox()
+        self.a_spinbox.setDisabled(True)
+        self.a_spinbox.setRange(0.1, 0.9)  # Set the range of values (min, max)
+        self.a_spinbox.setValue(0.1)  # Set the initial value
+        self.a_spinbox.setSingleStep(0.1)
+        self.a_spinbox.valueChanged.connect(self.update_custom_apf)  # Connect signal to slot
+        left_layout.addWidget(self.a_spinbox)
         left_layout.addLayout(self.button_layout)
         left_layout.addLayout(self.button_layout_2)
         splitter.addWidget(left_pane)
@@ -161,7 +199,8 @@ class ZPlanePlotApp(QMainWindow):
             self.transfer_function_canvas.update_transfer_function
         )
         self.create_standard_filter_library()
-
+        self.create_all_pass_filter_library()
+        
     def create_standard_filter_library(self):
 
         for filter_type in self.standard_filters.keys():
@@ -195,8 +234,86 @@ class ZPlanePlotApp(QMainWindow):
                     b, a, k = ellip(N=4, rp=1, rs=40, Wn=[0.3, 0.7], btype='band', analog=False, output='zpk')
             else:
                 pass
-            #print(f"Filter: {b}, {a}, {k}")
             self.standard_filters[filter_type] = (b, a)
+    def update_custom_apf(self):
+            a = self.a_spinbox.value()
+            b, a_coeff = self.first_order_all_pass(a)
+            self.all_pass_filters["Custom APF"] = (b, a_coeff)
+        
+    def toggle_a_spinbox(self):
+        if self.apf_dropdown.currentText() == "Custom APF":
+            self.a_spinbox.setDisabled(False)
+        else:
+            self.a_spinbox.setDisabled(True)
+
+    def create_all_pass_filter_library(self):
+        for APF_filter_type in self.all_pass_filters.keys():
+            if "Custom APF" in APF_filter_type:  # First-Order All-Pass Filter
+                a = 0.1
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            elif "All-Pass Filter 1" in APF_filter_type:  # Second-Order All-Pass Filter
+                a = 0.2
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            elif "All-Pass Filter 2" in APF_filter_type:  # Lattice All-Pass Filter
+                a = 0.4
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+
+            elif "All-Pass Filter 3" in APF_filter_type:  # Third-Order All-Pass Filter
+                a = 0.6
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            elif "All-Pass Filter 4" in APF_filter_type:  # Third-Order All-Pass Filter
+                a = 0.8
+                b, a_coeff = self.first_order_all_pass(a)
+                self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            # elif "Second Order APF" in APF_filter_type:  # Second-Order All-Pass Filter
+            #     a = 0.5
+            #     b, a_coeff = self.second_order_all_pass(a)
+            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+            
+            # elif "Lattice APF" in APF_filter_type:  # Lattice All-Pass Filter
+            #     a_coeffs = [0.7, 0.5]  
+            #     b, a_coeff = self.lattice_all_pass(a_coeffs)
+            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+
+            # elif "Third Order APF" in APF_filter_type:  # Third-Order All-Pass Filter
+            #     a0, a1, a2 = 0.5, 0.7, 0.9 
+            #     b, a_coeff = self.third_order_all_pass(a0, a1, a2)
+            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
+
+    def first_order_all_pass(self, a):
+        # First-order All-Pass Filter transfer function: H(z) = (z^-1 - a) / (1 - a * z^-1)
+        b = [a, -1]  # Numerator coefficients
+        a_coeff = [1, -a]  # Denominator coefficients
+        return b, a_coeff
+
+    # def second_order_all_pass(self, a):
+    #     # Second-order All-Pass Filter transfer function: H(z) = (z^-2 - 2a * z^-1 + 1) / (z^-2 + 2a * z^-1 + 1)
+    #     b = [1, -2*a, 1]
+    #     a_coeff = [1, 2*a, 1]
+    #     return b, a_coeff
+
+    # def lattice_all_pass(self, a_coeffs):
+    #     # Lattice All-Pass Filter: Cascading second-order sections
+    #     b_all, a_all = [], []
+    #     for a in a_coeffs:
+    #         b, a_coeff = self.second_order_all_pass(a)
+    #         b_all.extend(b)                 
+    #         a_all.extend(a_coeff)
+    #     return b_all, a_all
+
+    # def third_order_all_pass(self, a0, a1, a2):
+    #     # Transfer function: H(z) = (z^-3 - a2*z^-2 + a1*z^-1 - a0) / (z^-3 + a0*z^-2 + a1*z^-1 + a2)
+    #     b = [1, -a2, a1, -a0]
+    #     a_coeff = [1, a0, a1, a2]
+    #     return b, a_coeff
 
     def update_add_conjugate_button(self):
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
@@ -229,9 +346,7 @@ class ZPlanePlotApp(QMainWindow):
         if filter_type != "Choose Standard Filter":
             b, a = self.standard_filters[filter_type]
             self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
-            #print(f"Filter selected: {filter_type}")
-            #print(f"Zeros: {self.z_plane_canvas.zeros}")
-            #print(f"Poles: {self.z_plane_canvas.poles}")
+            
             self.z_plane_canvas.plot_z_plane()
     def generate_c_code(self):
         b,a = TransferFunctionCanvas.compute_transfer_function(self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
@@ -301,6 +416,93 @@ class ZPlanePlotApp(QMainWindow):
 
         print(c_code)
 
+    def update_chosen_apf(self, apf_type):
+            apf_type = self.apf_dropdown.currentText()
+            if apf_type != "Choose All-Pass Filter":
+                b, a = self.all_pass_filters[apf_type]
+                apf_zeros, apf_poles, gain = tf2zpk(b, a)
+                self.z_plane_canvas.zeros, self.z_plane_canvas.poles = apf_zeros.tolist(), apf_poles.tolist()
+                print(f"Gain of this {apf_type} filter is: {gain}")
+                self.z_plane_canvas.plot_z_plane()
+                
+    def select_form(self):
+        form_type = self.form_dropdown.currentText()
+        if form_type == "Direct Form II":
+            self.show_direct_form_II(self.transfer_function_canvas.b_coeffs, self.transfer_function_canvas.a_coeffs)
+        else:
+            self.show_cascade_form(self.transfer_function_canvas.b_coeffs, self.transfer_function_canvas.a_coeffs)
+
+    def show_direct_form_II(self, b, a):
+        b = b.tolist()
+        a = a.tolist()        
+        if len(b) < len(a):
+            for _ in range(len(a) - len(b)):
+                b.append(0) 
+        elif len(a) < len(b):
+            for _ in range(len(b) - len(a)):
+                a.append(0)
+        order = len(b) - 1 
+
+
+        for i in range(order):
+            if a[i] != 0:
+               
+                self.ax.arrow(0.6, 0.7 - (i * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                self.ax.text(0.45 , 0.72 - (i * 0.4), f"{a[i]:.2f}", fontsize=12, color="blue")
+
+            if b[i] != 0:
+                
+                self.ax.arrow(0.6, 0.7 - (i * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                self.ax.text(0.8 , 0.72 - (i * 0.4), f"{b[i]:.2f}", fontsize=12, color="blue")
+
+            self.ax.arrow(0.6, 0.7 - (i * 0.4), 0, -0.2, head_width=0.02, head_length=0.02, fc="k", ec="k")
+            self.ax.text(0.6,  0.5 - (i *  0.4), r"$Z^{-1}$", fontsize=9, ha="center", va="center",
+                    bbox=dict(boxstyle="square", facecolor="yellow"))
+            self.ax.arrow(0.6, 0.4 - (i * 0.4), 0, -0.08, head_width=0.02, head_length=0.02, fc="k", ec="k")
+
+        if a[order] != 0:
+            self.ax.arrow(0.6, 0.7 - (order * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+            self.ax.text(0.45 , 0.72 - (order * 0.4), f"{a[order]:.2f}", fontsize=12, color="blue")
+
+        if b[order] != 0:
+            self.ax.arrow(0.6, 0.7 - (order * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+            self.ax.text(0.8 , 0.72 - (order * 0.4), f"{b[order]:.2f}", fontsize=12, color="blue")
+
+        
+        for i in range(order):  
+                            
+                if a[i + 1] != 0:
+                    self.ax.text(0.38 , 0.7 - (i * 0.4), "+", fontsize=10,
+                            bbox=dict(boxstyle="circle", facecolor="cyan"))
+                    self.ax.arrow(0.4, 0.32 - (i * 0.4), 0, 0.3, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                if b[i+1] != 0:
+                    self.ax.text(0.99 , 0.7 - (i * 0.4), "+", fontsize=10,
+                            bbox=dict(boxstyle="circle", facecolor="cyan"))
+                    
+                    self.ax.arrow(1, 0.32 - (i * 0.4), 0, 0.3, head_width=0.02, head_length=0.02, fc="k", ec="k")
+        self.ax.arrow(0.25, 0.7, 0.1, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+        self.ax.arrow(1.24, 0.7, -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+        self.ax.text(0.2, 0.7, "X [n]", fontsize=12, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
+        self.ax.text(1.26, 0.7, "Y [n]", fontsize=12, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
+        self.ax.set_xlim(-0.1, 1.3)
+        self.ax.set_ylim(-1, 1)
+        plt.title("Direct Form II Block Diagram")
+        self.form_canvas.draw()
+       
+               
+    def show_cascade_form(self, b, a):
+        pass
+
+
+
+
+        
+    
+
+       
+
+        
+        
 
 class ZPlaneCanvas(FigureCanvas):
     from PyQt5.QtCore import pyqtSignal
@@ -317,7 +519,6 @@ class ZPlaneCanvas(FigureCanvas):
         self.poles = []
         self.undo_stack = []
         self.redo_stack = []
-
         self.plot_z_plane()
 
         self.mpl_connect("button_press_event", self.on_click)
@@ -348,6 +549,7 @@ class ZPlaneCanvas(FigureCanvas):
         #print(self.poles)
         self.draw()
         self.transfer_function_updated.emit(self.zeros, self.poles)
+
 
     def on_click(self, event):
         if event.inaxes != self.ax:
@@ -544,13 +746,15 @@ class ZPlaneCanvas(FigureCanvas):
         self.draw()
 
 
+
 class TransferFunctionCanvas(FigureCanvas):
     def __init__(self):
         self.figure, (self.ax_mag, self.ax_phase) = plt.subplots(2, 1, figsize=(6, 6))
         super().__init__(self.figure)
         self.plot_initial()
         self.z_plane_canvas = ZPlaneCanvas()
-
+        self.b_coeffs = None
+        self.a_coeffs = None
     def plot_initial(self):
         self.ax_mag.set_title("Magnitude of Transfer Function")
         self.ax_mag.set_xlabel("Frequency (rad/s)")
@@ -580,9 +784,11 @@ class TransferFunctionCanvas(FigureCanvas):
         for pole in poles:
             X_Z *= (z - pole)
         H = Y_Z / X_Z
+        self.b_coeffs, self.a_coeffs = zpk2tf(zeros, poles, 1)
+        print(f"b_coeff: {self.b_coeffs}")
+        print(f"a_coeff: {self.a_coeffs}")
         if c_code == True:
-           b, a = zpk2tf(zeros, poles, 1)
-           return b, a
+           return self.z_plane_canvas.b_coeffs, self.z_plane_canvas.a_coeffs
         else:
            return H, omega
 
