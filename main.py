@@ -582,11 +582,6 @@ class GraphsWindow(QWidget):
         self.mouse_input_area.setMouseTracking(True)
         self.mouse_input_area.mouseMoveEvent = self.mouse_move_event
 
-        self.third_plot = pg.PlotWidget(title="TBD")
-        self.third_plot.setLabel("bottom", "Time")
-        self.third_plot.setLabel("left", "Amplitude")
-        left_layout.addWidget(self.third_plot)
-
         main_layout.addLayout(left_layout)
         main_layout.addWidget(self.mouse_input_area)
 
