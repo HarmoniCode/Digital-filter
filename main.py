@@ -8,12 +8,12 @@ import csv
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,QFrame,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox 
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar
+    # NavigationToolbar2QT as NavigationToolbar
 )
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -59,10 +59,12 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         local_left_pane = QWidget()
         local_left_layout = QVBoxLayout(local_left_pane)
 
+        upper_layout = QHBoxLayout()
+        local_left_layout.addLayout(upper_layout)
+
         self.z_plane_canvas = ZPlaneCanvas()
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         # left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
-        local_left_layout.addWidget(self.z_plane_canvas)
 
         self.coord_layout = QHBoxLayout()
         self.coord_label = QLabel("Enter Coordinates (Real, Imaginary):")
@@ -82,9 +84,19 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.y_input.setToolTip("Value must be between -1.5 and 1.5")
         self.coord_layout.addWidget(self.y_input)
 
-        local_left_layout.addLayout(self.coord_layout)
+        upper_left_layout = QVBoxLayout()
+        upper_left_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        upper_left_layout.setSpacing(20)
+
+        upper_layout.addLayout(upper_left_layout)
+        upper_layout.addWidget(self.z_plane_canvas)
+
+
+        upper_left_layout.addLayout(self.coord_layout)
 
         self.buttons_layout = QVBoxLayout()
+        self.buttons_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self.buttons_layout.setSpacing(20)
         
 
         # self.button_layout = QHBoxLayout()
@@ -150,7 +162,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         ])
         self.filter_dropdown.setCurrentIndex(0)
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
-        local_left_layout.addWidget(self.filter_dropdown)
+        upper_left_layout.addWidget(self.filter_dropdown)
 
         self.apf_dropdown = QComboBox()
         self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
@@ -160,7 +172,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.apf_dropdown.setCurrentIndex(0)
         self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
         self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
-        local_left_layout.addWidget(self.apf_dropdown)
+        upper_left_layout.addWidget(self.apf_dropdown)
 
         self.a_spinbox = QDoubleSpinBox()
         self.a_spinbox.setDisabled(True)
@@ -168,7 +180,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.a_spinbox.setValue(0.1)  # Set the initial value
         self.a_spinbox.setSingleStep(0.1)
         self.a_spinbox.valueChanged.connect(self.update_custom_apf)  # Connect signal to slot
-        local_left_layout.addWidget(self.a_spinbox)
+        upper_left_layout.addWidget(self.a_spinbox)
 
         left_layout.addLayout(self.buttons_layout)
         left_layout.addLayout(local_left_layout)
@@ -181,7 +193,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         # right_layout = QVBoxLayout(right_pane)
 
         self.transfer_function_canvas = TransferFunctionCanvas()
-        local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
+        # local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
         local_left_layout.addWidget(self.transfer_function_canvas)
 
         splitter.addWidget(local_left_pane)
@@ -750,8 +762,9 @@ class GraphsWindow(QWidget):
         self.mouse_timer.timeout.connect(self.update_mouse_signal)
         self.mouse_signal = []
 
-        main_layout = QHBoxLayout()
-        left_layout = QVBoxLayout()
+        # main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout()
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignCenter)
 
         self.radio_csv = QRadioButton("Upload CSV")
         self.radio_mouse = QRadioButton("Draw using Mouse")
@@ -761,36 +774,55 @@ class GraphsWindow(QWidget):
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.radio_csv)
         button_layout.addWidget(self.radio_mouse)
-        left_layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
 
         self.input_button = QPushButton("Load Signal")
         self.input_button.clicked.connect(self.load_signal)
-        left_layout.addWidget(self.input_button)
+        main_layout.addWidget(self.input_button)
 
         self.temporal_resolution = QSlider(Qt.Horizontal)
         self.temporal_resolution.setMinimum(1)
         self.temporal_resolution.setMaximum(100)
         self.temporal_resolution.setValue(50)
-        left_layout.addWidget(self.temporal_resolution)
+        main_layout.addWidget(self.temporal_resolution)
 
         self.input_plot = pg.PlotWidget(title="Input Signal")
         self.input_plot.setLabel("bottom", "Time")
         self.input_plot.setLabel("left", "Amplitude")
-        left_layout.addWidget(self.input_plot)
+        main_layout.addWidget(self.input_plot)
 
         self.filtered_plot = pg.PlotWidget(title="Filtered Signal")
         self.filtered_plot.setLabel("bottom", "Time")
         self.filtered_plot.setLabel("left", "Amplitude")
-        left_layout.addWidget(self.filtered_plot)
+        main_layout.addWidget(self.filtered_plot)
 
+
+        H_layout = QHBoxLayout()
+        H_layout.addSpacerItem(
+            QSpacerItem(
+                0,
+                0,
+                QSizePolicy.Policy.Minimum,
+                QSizePolicy.Policy.Expanding,
+            )
+        )
         self.mouse_input_area = QWidget()
+        H_layout.addWidget(self.mouse_input_area)
+        H_layout.addSpacerItem(
+            QSpacerItem(
+                0,
+                0,
+                QSizePolicy.Policy.Minimum,
+                QSizePolicy.Policy.Expanding,
+            )
+        )
         self.mouse_input_area.setFixedSize(400, 300)
         self.mouse_input_area.setStyleSheet("background-color: lightgray;")
         self.mouse_input_area.setMouseTracking(True)
         self.mouse_input_area.mouseMoveEvent = self.mouse_move_event
 
-        main_layout.addLayout(left_layout)
-        main_layout.addWidget(self.mouse_input_area)
+        main_layout.addLayout(main_layout)
+        main_layout.addLayout(H_layout)
 
         self.setLayout(main_layout)
 
