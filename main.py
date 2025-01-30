@@ -341,8 +341,8 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
     def first_order_all_pass(self, a):
         # First-order All-Pass Filter transfer function: H(z) = (z^-1 - a) / (1 - a * z^-1)
-        b = [a, -1]  # Numerator coefficients
-        a_coeff = [1, -a]  # Denominator coefficients
+        b = [a, 1]  # Numerator coefficients
+        a_coeff = [1, a]  # Denominator coefficients
         return b, a_coeff
 
     # def second_order_all_pass(self, a):
@@ -399,7 +399,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
             b, a = self.standard_filters[filter_type]
             self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
             
-            self.z_plane_canvas.plot_z_plane()
+            self.z_plane_canvas.plot_z_plane(self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
     def generate_c_code(self):
         b,a = TransferFunctionCanvas.compute_transfer_function(self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
         c_template = Template("""
@@ -469,13 +469,21 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         print(c_code)
     def update_chosen_apf(self, apf_type):
             apf_type = self.apf_dropdown.currentText()
+            combined_zeros =[]
+            combined_poles = []
             if apf_type != "Choose All-Pass Filter":
                 b, a = self.all_pass_filters[apf_type]
                 apf_zeros, apf_poles, gain = tf2zpk(b, a)
-                self.z_plane_canvas.zeros, self.z_plane_canvas.poles = apf_zeros.tolist(), apf_poles.tolist()
-                print(f"Gain of this {apf_type} filter is: {gain}")
-                self.z_plane_canvas.plot_z_plane()
-                
+                apf_zeros = apf_zeros.tolist()
+                apf_poles = apf_poles.tolist()
+                combined_zeros = self.z_plane_canvas.zeros + apf_zeros
+                combined_poles = self.z_plane_canvas.poles + apf_poles
+                print(f"combined Zeros of this {apf_type} filter are: {combined_zeros}")
+                print(f"zeros of this {apf_type} filter are: {apf_zeros}")
+                print(f"combined Poles of this {apf_type} filter are: {combined_poles}")
+                print(f"poles of this {apf_type} filter are: {apf_poles}")
+                self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
+                self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, gain)
     def select_form(self):
         form_type = self.form_dropdown.currentText()
         if form_type == "Direct Form II":
@@ -560,13 +568,38 @@ class ZPlaneCanvas(FigureCanvas):
         self.poles = []
         self.undo_stack = []
         self.redo_stack = []
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
         self.mpl_connect("button_press_event", self.on_click)
         self.mpl_connect("motion_notify_event", self.on_drag)
         self.mpl_connect("button_release_event", self.on_release)
 
-    def plot_z_plane(self):
+    # def plot_z_plane(self):
+    #     self.ax.clear()
+
+    #     theta = np.linspace(0, 2 * np.pi, 100)
+    #     self.ax.plot(np.cos(theta), np.sin(theta), "b--", label="Unit Circle")
+
+    #     self.ax.axhline(0, color="black", linewidth=0.5)
+    #     self.ax.axvline(0, color="black", linewidth=0.5)
+    #     self.ax.set_xlim(-1.5, 1.5)
+    #     self.ax.set_ylim(-1.5, 1.5)
+    #     self.ax.set_aspect("equal", adjustable="box")
+
+    #     if self.zeros:
+    #         self.ax.plot([z.real for z in self.zeros], [z.imag for z in self.zeros], "go", label="Zeros")
+    #     if self.poles:
+    #         self.ax.plot([p.real for p in self.poles], [p.imag for p in self.poles], "rx", label="Poles")
+
+    #     self.ax.legend()
+    #     #print("Current existing zeroes:")
+    #     #print(self.zeros)
+    #     #print("Current existing poles:")
+    #     #print(self.poles)
+    #     self.draw()
+    #     self.transfer_function_updated.emit(self.zeros, self.poles)
+
+    def plot_z_plane(self,zeros,poles):
         self.ax.clear()
 
         theta = np.linspace(0, 2 * np.pi, 100)
@@ -578,12 +611,12 @@ class ZPlaneCanvas(FigureCanvas):
         self.ax.set_ylim(-1.5, 1.5)
         self.ax.set_aspect("equal", adjustable="box")
 
-        if self.zeros:
-            self.ax.plot([z.real for z in self.zeros], [z.imag for z in self.zeros], "go", label="Zeros")
+        if zeros:
+            self.ax.plot([z.real for z in zeros], [z.imag for z in zeros], "go", label="Zeros")
         if self.poles:
-            self.ax.plot([p.real for p in self.poles], [p.imag for p in self.poles], "rx", label="Poles")
+            self.ax.plot([p.real for p in poles], [p.imag for p in poles], "rx", label="Poles")
 
-        self.ax.legend()
+        # self.ax.legend()
         #print("Current existing zeroes:")
         #print(self.zeros)
         #print("Current existing poles:")
@@ -598,7 +631,7 @@ class ZPlaneCanvas(FigureCanvas):
 
         elif event.button == 3:
             self.delete_point(event.xdata, event.ydata)
-            self.plot_z_plane()
+            self.plot_z_plane(self.zeros, self.poles)
 
         for i, (zero, pole) in enumerate(zip_longest(self.zeros, self.poles, fillvalue=None)):
             if zero is not None:
@@ -675,18 +708,18 @@ class ZPlaneCanvas(FigureCanvas):
         if self.undo_stack:
             self.redo_stack.append((self.zeros.copy(), self.poles.copy()))
             self.zeros, self.poles = self.undo_stack.pop()
-            self.plot_z_plane()
+            self.plot_z_plane(self.zeros, self.poles)
 
     def redo(self):
         if self.redo_stack:
             self.undo_stack.append((self.zeros.copy(), self.poles.copy()))
             self.zeros, self.poles = self.redo_stack.pop()
-            self.plot_z_plane()
+            self.plot_z_plane(self.zeros, self.poles)
 
     def switch_zeros_poles(self):
         self.save_state()
         self.zeros, self.poles = self.poles, self.zeros
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def add_conjugate(self):
         self.save_state()
@@ -699,33 +732,33 @@ class ZPlaneCanvas(FigureCanvas):
             pole = self.selected_conjugate
             self.poles.append(complex(pole.real, -pole.imag))
             self.selected_conjugate = None
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def add_zero(self, x, y):
         self.save_state()
         self.zeros.append(complex(x, y))
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def add_pole(self, x, y):
         self.save_state()
         self.poles.append(complex(x, y))
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def clear_zeros(self):
         self.save_state()
         self.zeros = []
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def clear_poles(self):
         self.save_state()
         self.poles = []
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def clear_all(self):
         self.save_state()
         self.zeros = []
         self.poles = []
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
 
     def save_state_to_csv(self):
         options = QFileDialog.Options()
@@ -755,11 +788,11 @@ class ZPlaneCanvas(FigureCanvas):
                         self.zeros.append(complex(float(row[1]), float(row[2])))
                     elif row[0] == 'Pole':
                         self.poles.append(complex(float(row[1]), float(row[2])))
-                self.plot_z_plane()
+                self.plot_z_plane(self.zeros, self.poles)
 
     def update_plot(self):
         self.ax.clear()
-        self.plot_z_plane()
+        self.plot_z_plane(self.zeros, self.poles)
         parent_widget = self.parentWidget()
         while parent_widget and not hasattr(parent_widget, 'update_add_conjugate_button'):
             parent_widget = parent_widget.parentWidget()
@@ -786,7 +819,7 @@ class ZPlaneCanvas(FigureCanvas):
                 "rx", markersize=8, zorder=2,
             )
 
-        self.ax.legend()
+        # self.ax.legend()
         self.draw()
 
 
@@ -802,7 +835,7 @@ class TransferFunctionCanvas(FigureCanvas):
         self.a_coeffs = None
     def plot_initial(self):
         self.ax_mag.set_title("Magnitude of Transfer Function")
-        self.ax_mag.set_xlabel("Frequency (rad/s)")
+
         self.ax_mag.set_ylabel("Magnitude")
         self.ax_mag.grid(True)
 
@@ -830,19 +863,17 @@ class TransferFunctionCanvas(FigureCanvas):
             X_Z *= (z - pole)
         H = Y_Z / X_Z
         self.b_coeffs, self.a_coeffs = zpk2tf(zeros, poles, 1)
-        print(f"b_coeff: {self.b_coeffs}")
-        print(f"a_coeff: {self.a_coeffs}")
         if c_code == True:
-           return self.z_plane_canvas.b_coeffs, self.z_plane_canvas.a_coeffs
+           return self.b_coeffs, self.a_coeffs
         else:
            return H, omega
 
-    def update_transfer_function(self, zeros, poles):
+    def update_transfer_function(self, zeros, poles, gain = 1):
         """
         Updates the transfer function plot.
         """
         H, omega = self.compute_transfer_function(False, zeros, poles)
-        magnitude = np.abs(H)
+        magnitude = np.abs(gain) * np.abs(H)
         phase = np.angle(H)
 
         self.ax_mag.clear()
@@ -850,7 +881,7 @@ class TransferFunctionCanvas(FigureCanvas):
 
         self.ax_mag.plot(omega, magnitude, label="|H(z)|", color="blue")
         self.ax_mag.set_title("Magnitude of Transfer Function")
-        self.ax_mag.set_xlabel("Frequency (rad/s)")
+
         self.ax_mag.set_ylabel("Magnitude")
         self.ax_mag.grid(True)
 
@@ -1055,7 +1086,7 @@ class GraphsWindow(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Main Window")
+        self.setWindowTitle("Digital Filter Designer")
         self.setGeometry(100, 100, 1600, 900)
 
         self.main_widget = QWidget()
