@@ -71,7 +71,10 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.direct_form_ii_layout = QVBoxLayout(self.direct_form_ii_widget)
         self.form_canvas = FigureCanvas(self.fig)
         self.direct_form_ii_layout.addWidget(self.form_canvas)
-        right_layout.addWidget(self.direct_form_ii_widget)
+
+        bottom_splitter = QSplitter(Qt.Vertical)
+
+        bottom_splitter.addWidget(self.direct_form_ii_widget)
 
         self.coord_layout = QHBoxLayout()
         self.coord_layout.setSpacing(5)
@@ -165,6 +168,10 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.generate_code_button.clicked.connect(self.generate_c_code)
         self.buttons_layout.addWidget(self.generate_code_button)
 
+        self.clear_form_buttons = QPushButton("Clear Form")
+        self.clear_form_buttons.clicked.connect(self.clear_direct_form_ii_widget)
+        self.buttons_layout.addWidget(self.clear_form_buttons)
+
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.insertItem(0, "Choose Standard Filter")
         self.filter_dropdown.addItems([
@@ -214,7 +221,8 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
         self.transfer_function_canvas = TransferFunctionCanvas()
         # local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
-        right_layout.addWidget(self.transfer_function_canvas)
+        bottom_splitter.addWidget(self.transfer_function_canvas)
+        right_layout.addWidget(bottom_splitter  )
 
         splitter.addWidget(buttons_frame)
         splitter.addWidget(right_frame)
@@ -226,6 +234,24 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.create_standard_filter_library()
         self.create_all_pass_filter_library()
         
+
+
+    def clear_direct_form_ii_widget(self):
+        
+        while self.direct_form_ii_layout.count():
+            item = self.direct_form_ii_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        
+        self.fig.clf()  
+        self.ax = self.fig.add_subplot(111)  
+        self.ax.axis('off') 
+        
+        self.form_canvas = FigureCanvas(self.fig)
+        self.direct_form_ii_layout.addWidget(self.form_canvas)
+        self.form_canvas.draw()
+
     def create_standard_filter_library(self):
 
         for filter_type in self.standard_filters.keys():
