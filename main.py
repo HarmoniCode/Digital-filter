@@ -53,21 +53,21 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         splitter = QSplitter(Qt.Horizontal)
         self.main_layout.addWidget(splitter)
 
-        left_frame=QFrame()
-        left_layout=QHBoxLayout(left_frame)
 
-        local_left_frame = QFrame()
-        local_left_layout = QVBoxLayout(local_left_frame)
+        right_frame = QFrame()
+        right_frame.setObjectName("right_frame")
+        right_layout = QVBoxLayout(right_frame)
 
         upper_layout = QHBoxLayout()
-        local_left_layout.addLayout(upper_layout)
+        right_layout.addLayout(upper_layout)
 
         self.z_plane_canvas = ZPlaneCanvas()
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         # left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
 
         self.coord_layout = QHBoxLayout()
-        self.coord_label = QLabel("Enter Coordinates (Real, Imaginary):")
+        self.coord_layout.setSpacing(5)
+        self.coord_label = QLabel("Coordinates (Real, Imaginary):")
         self.coord_layout.addWidget(self.coord_label)
 
         validator = QDoubleValidator(-1.5, 1.5, 2, self)
@@ -84,17 +84,22 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.y_input.setToolTip("Value must be between -1.5 and 1.5")
         self.coord_layout.addWidget(self.y_input)
 
-        upper_left_layout = QVBoxLayout()
+        upper_left_frame = QFrame()
+        upper_left_frame.setObjectName("upper_left_frame")
+        upper_left_layout = QVBoxLayout(upper_left_frame)
         upper_left_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         upper_left_layout.setSpacing(20)
 
-        upper_layout.addLayout(upper_left_layout)
+        upper_layout.addWidget(upper_left_frame)
         upper_layout.addWidget(self.z_plane_canvas)
 
 
         upper_left_layout.addLayout(self.coord_layout)
 
-        self.buttons_layout = QVBoxLayout()
+        buttons_frame = QFrame()
+        buttons_frame.setObjectName("buttons_frame")
+
+        self.buttons_layout = QVBoxLayout(buttons_frame)
         self.buttons_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self.buttons_layout.setSpacing(20)
         
@@ -128,7 +133,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.clear_all_button.clicked.connect(self.z_plane_canvas.clear_all)
         self.buttons_layout.addWidget(self.clear_all_button)
 
-        self.switch_button = QPushButton("Switch Zeros and Poles")
+        self.switch_button = QPushButton("Switch")
         self.switch_button.clicked.connect(self.switch_zeros_poles)
         self.buttons_layout.addWidget(self.switch_button)
 
@@ -140,15 +145,15 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.redo_button.clicked.connect(self.z_plane_canvas.redo)
         self.buttons_layout.addWidget(self.redo_button)
 
-        self.save_csv_button = QPushButton("Save as CSV")
+        self.save_csv_button = QPushButton("Save")
         self.save_csv_button.clicked.connect(self.z_plane_canvas.save_state_to_csv)
         self.buttons_layout.addWidget(self.save_csv_button)
 
-        self.load_csv_button = QPushButton("Load from CSV")
+        self.load_csv_button = QPushButton("Load ")
         self.load_csv_button.clicked.connect(self.z_plane_canvas.load_state_from_csv)
         self.buttons_layout.addWidget(self.load_csv_button)
 
-        self.generate_code_button = QPushButton("Generate C Code")
+        self.generate_code_button = QPushButton("C Code")
         self.generate_code_button.clicked.connect(self.generate_c_code)
         self.buttons_layout.addWidget(self.generate_code_button)
 
@@ -182,21 +187,20 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.a_spinbox.valueChanged.connect(self.update_custom_apf)  # Connect signal to slot
         upper_left_layout.addWidget(self.a_spinbox)
 
-        left_layout.addLayout(self.buttons_layout)
-        left_layout.addLayout(local_left_layout)
+        # left_layout.addWidget(buttons_frame)
+        # left_layout.addLayout(right_layout)
         # left_layout.addLayout(self.button_layout)
         # left_layout.addLayout(self.button_layout_2)
-        splitter.addWidget(left_frame)
-        splitter.addWidget(local_left_frame)
 
         # right_pane = QWidget()
         # right_layout = QVBoxLayout(right_pane)
 
         self.transfer_function_canvas = TransferFunctionCanvas()
         # local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
-        local_left_layout.addWidget(self.transfer_function_canvas)
+        right_layout.addWidget(self.transfer_function_canvas)
 
-        splitter.addWidget(local_left_frame)
+        splitter.addWidget(buttons_frame)
+        splitter.addWidget(right_frame)
         splitter.setSizes([400, 8000])
 
         self.z_plane_canvas.transfer_function_updated.connect(
@@ -442,7 +446,8 @@ class ZPlaneCanvas(FigureCanvas):
     def __init__(self):
         self.selected_conjugate = None
         self.selected = None
-        self.figure, self.ax = plt.subplots(figsize=(6, 6))
+        self.figure, self.ax = plt.subplots(figsize=(5, 3))
+        self.figure.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)  # Adjust these values as needed
         super().__init__(self.figure)
 
         self.zeros = []
@@ -647,10 +652,13 @@ class ZPlaneCanvas(FigureCanvas):
                 self.plot_z_plane()
 
     def update_plot(self):
-
         self.ax.clear()
         self.plot_z_plane()
-        self.parent().parent().parent().parent().update_add_conjugate_button()
+        parent_widget = self.parentWidget()
+        while parent_widget and not hasattr(parent_widget, 'update_add_conjugate_button'):
+            parent_widget = parent_widget.parentWidget()
+        if parent_widget:
+            parent_widget.update_add_conjugate_button()
 
         if self.selection_flag == 'zero':
             self.ax.plot(
@@ -679,6 +687,7 @@ class ZPlaneCanvas(FigureCanvas):
 class TransferFunctionCanvas(FigureCanvas):
     def __init__(self):
         self.figure, (self.ax_mag, self.ax_phase) = plt.subplots(2, 1, figsize=(6, 6))
+        self.figure.subplots_adjust(hspace=0.5)  # Adjust this value to increase vertical space
         super().__init__(self.figure)
         self.plot_initial()
         self.z_plane_canvas = ZPlaneCanvas()
@@ -947,6 +956,7 @@ class MainWindow(QMainWindow):
         self.graphs_window = GraphsWindow(self.z_plane_plot_app.z_plane_canvas)
 
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setObjectName("splitter")
         splitter.addWidget(self.z_plane_plot_app)
         splitter.addWidget(self.graphs_window)
 
@@ -954,6 +964,8 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    with open("styles/index.qss", "r") as file:
+        app.setStyleSheet(file.read())
     main_window = MainWindow()
     main_window.show()
     sys.exit(app.exec_())
