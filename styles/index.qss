@@ -91,6 +91,13 @@ image: url(./icons/arrow_down.png);
     height: 20px;
 }
 
+QRadioButton{
+    background-color: transparent;
+}
+QSlider{
+    background-color: transparent;
+}
+
 
 
 QDoubleSpinBox{
