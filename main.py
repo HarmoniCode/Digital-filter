@@ -67,6 +67,12 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         # left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
 
+        self.direct_form_ii_widget = QFrame()
+        self.direct_form_ii_layout = QVBoxLayout(self.direct_form_ii_widget)
+        self.form_canvas = FigureCanvas(self.fig)
+        self.direct_form_ii_layout.addWidget(self.form_canvas)
+        right_layout.addWidget(self.direct_form_ii_widget)
+
         self.coord_layout = QHBoxLayout()
         self.coord_layout.setSpacing(5)
         self.coord_label = QLabel("Coordinates (Real, Imaginary):")
