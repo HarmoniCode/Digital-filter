@@ -7,8 +7,9 @@ import csv
 from PyQt5.QtGui import QDoubleValidator, QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,QFrame,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QListWidgetItem
 )
+from PyQt5.QtGui import QDoubleValidator, QPixmap, QStandardItemModel, QStandardItem
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -183,6 +184,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.buttons_layout.addWidget(self.clear_form_buttons)
 
         self.filter_dropdown = QComboBox()
+
         self.filter_dropdown.insertItem(0, "Choose Standard Filter")
         self.filter_dropdown.addItems([
             "Butterworth LPF", "Butterworth HPF", "Butterworth BPF",
@@ -195,16 +197,45 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         upper_left_layout.addWidget(self.filter_dropdown)
 
         self.apf_dropdown = QComboBox()
-        self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
-        self.apf_dropdown.addItems([
-            "Custom APF", "First-Order APF (a=0.2)", "First-Order APF (a=0.5)", "First-Order APF (a=0.8)"
-        ])
-        self.apf_dropdown.setCurrentIndex(0)
-        self.apf_dropdown.currentIndexChanged.connect(self.update_custom_apf)
-        self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
-        self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
-        self.apf_dropdown.currentIndexChanged.connect(self.save_apf)
+        # self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
+        # self.apf_dropdown.addItems([
+        #     "Custom APF", "First-Order APF (a=0.2)", "First-Order APF (a=0.5)", "First-Order APF (a=0.8)"
+        # ])
+        # self.apf_dropdown.setCurrentIndex(0)
+        # self.apf_dropdown.currentIndexChanged.connect(self.update_custom_apf)
+        # self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
+        # self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
+        # self.apf_dropdown.currentIndexChanged.connect(self.save_apf)
+        # upper_left_layout.addWidget(self.apf_dropdown)
+
+        ###
+        self.apf_dropdown.setEditable(False)  # Ensure it's not editable
+
+        model = QStandardItemModel()
+        self.apf_dropdown.setModel(model)
+
+        # Add default text as the first item (disabled)
+        default_item = QStandardItem("Choose All-Pass Filter")
+        default_item.setFlags(Qt.NoItemFlags)  # Disable selection
+        model.appendRow(default_item)
+
+        filters = [
+        "Custom APF", "First-Order APF (a=0.2)", "First-Order APF (a=0.5)", "First-Order APF (a=0.8)"
+        ]
+
+        for filter_name in filters:
+            item = QStandardItem(filter_name)
+            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            item.setData(Qt.Unchecked, Qt.CheckStateRole)  # Start with all unchecked
+            model.appendRow(item)
+
+        self.apf_dropdown.view().pressed.connect(self.handle_item_checked)
+        self.apf_dropdown.view().pressed.connect(self.update_custom_apf)
+        self.apf_dropdown.view().pressed.connect(self.update_chosen_apf)
+        self.apf_dropdown.view().pressed.connect(self.toggle_a_spinbox)
+        self.apf_dropdown.view().pressed.connect(self.toggle_save_button)
         upper_left_layout.addWidget(self.apf_dropdown)
+        ###
 
         self.a_spinbox = QSlider(Qt.Horizontal)
         self.a_spinbox.setDisabled(True)
@@ -246,19 +277,55 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         )
         self.create_standard_filter_library()
         self.create_all_pass_filter_library()
+    
+    def get_checked_items(self):
+        """Returns a list of names of checked items in the combo box."""
+        checked_items = []
+        model = self.apf_dropdown.model()
+        
+        for row in range(1, model.rowCount()):  # Skip the first row (default text)
+            item = model.item(row)
+            if item.checkState() == Qt.Checked:
+                checked_items.append(item.text())
+
+        return checked_items
+    
+    def handle_item_checked(self, index):
+        """Toggle check state when an item is clicked."""
+        item = self.apf_dropdown.model().itemFromIndex(index)
+        if item and item.flags() & Qt.ItemIsUserCheckable:  # Only toggle checkable items
+            item.setCheckState(Qt.Checked if item.checkState() == Qt.Unchecked else Qt.Unchecked)
+            self.update_chosen_apf()  # Update the plot and transfer function
         
     def show_preview_window(self):
         self.preview_window.show()
     
+    def toggle_save_button(self):
+        selected_filters = self.get_checked_items()
+        if "Custom APF" in selected_filters:
+            self.save_apf_button.setDisabled(False)
+        else:
+            self.save_apf_button.setDisabled(True)
+    
     def save_apf(self):
-        if self.apf_dropdown.currentText() == "Custom APF":
+        selected_filters = self.get_checked_items()
+
+        # if self.apf_dropdown.currentText() == "Custom APF":
+        if "Custom APF" in selected_filters:
             self.save_apf_button.setDisabled(False)
             a = self.a_spinbox.value() / 10.0
             b, a_coeff = self.first_order_all_pass(a)
             filter_name = f"Saved APF (a={a})"
             self.all_pass_filters[filter_name] = (b, a_coeff)
             print(f"Saved APF: {filter_name} with coefficients: b={b}, a={a_coeff}")
-            self.apf_dropdown.addItem(filter_name)
+            # self.apf_dropdown.addItem(filter_name)
+
+            # Add the new filter to the dropdown
+            model = self.apf_dropdown.model()
+            item = QStandardItem(filter_name)
+            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            item.setData(Qt.Unchecked, Qt.CheckStateRole)  # Start with unchecked
+            model.appendRow(item)
         else:
             self.save_apf_button.setDisabled(True)
 
@@ -319,7 +386,10 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.all_pass_filters["Custom APF"] = (b, a_coeff)
     
     def toggle_a_spinbox(self):
-        if self.apf_dropdown.currentText() == "Custom APF":
+        selected_filters = self.get_checked_items()
+
+        # if self.apf_dropdown.currentText() == "Custom APF":
+        if "Custom APF" in selected_filters:
             self.a_spinbox.setDisabled(False)
         else:
             self.a_spinbox.setDisabled(True)
@@ -407,8 +477,9 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         if filter_type != "Choose Standard Filter":
             b, a = self.standard_filters[filter_type]
             self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
-            
             self.z_plane_canvas.plot_z_plane()
+            self.update_chosen_apf()  # Update the chosen APFs and combine with the standard filter
+
     def generate_c_code(self):
         b,a = TransferFunctionCanvas.compute_transfer_function(self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
         c_template = Template("""
@@ -476,14 +547,51 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
 
         print(c_code)
+
     def update_chosen_apf(self, apf_type):
-        apf_type = self.apf_dropdown.currentText()
-        if apf_type != "Choose All-Pass Filter":
-            b, a = self.all_pass_filters[apf_type]
-            apf_zeros, apf_poles, gain = tf2zpk(b, a)
-            self.z_plane_canvas.zeros, self.z_plane_canvas.poles = apf_zeros.tolist(), apf_poles.tolist()
-            print(f"zeros:{apf_zeros} poles:{apf_poles} gain:{gain}")
-            self.z_plane_canvas.plot_z_plane()
+        selected_filters = self.get_checked_items()
+
+        combined_zeros = []
+        combined_poles = []
+
+        # apf_type = self.apf_dropdown.currentText()
+        for apf_type in selected_filters:
+            if apf_type != "Choose All-Pass Filter":
+                b, a = self.all_pass_filters[apf_type]
+                apf_zeros, apf_poles, gain = tf2zpk(b, a)
+                # self.z_plane_canvas.zeros, self.z_plane_canvas.poles = apf_zeros.tolist(), apf_poles.tolist()
+                # print(f"zeros:{apf_zeros} poles:{apf_poles} gain:{gain}")
+                combined_zeros.extend(apf_zeros)
+                combined_poles.extend(apf_poles)
+
+        # Get the selected standard filter
+        filter_type = self.filter_dropdown.currentText()
+        if filter_type != "Choose Standard Filter":
+            b, a = self.standard_filters[filter_type]
+            standard_zeros, standard_poles, gain = tf2zpk(b, a)
+            combined_zeros.extend(standard_zeros)
+            combined_poles.extend(standard_poles)
+
+        self.z_plane_canvas.zeros = combined_zeros
+        self.z_plane_canvas.poles = combined_poles
+        self.z_plane_canvas.plot_z_plane()
+
+        # Compute the combined transfer function of the APFs
+        H_apf, omega, H_dc_apf = self.transfer_function_canvas.compute_transfer_function(False, combined_zeros, combined_poles)
+
+        if filter_type != "Choose Standard Filter":
+            # Compute the transfer function of the standard filter
+            H_standard, omega, H_dc_standard = self.transfer_function_canvas.compute_transfer_function(False, standard_zeros, standard_poles)
+
+            # Multiply the transfer functions
+            H_combined = H_standard * H_apf
+
+            # Update the transfer function plot
+            self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, H_combined)
+        else:
+            # Update the transfer function plot with only APFs
+            self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, H_apf)
+
                 
     def select_form(self):
         form_type = self.form_dropdown.currentText()
@@ -847,11 +955,20 @@ class TransferFunctionCanvas(FigureCanvas):
         else:
            return H, omega, H_dc
 
-    def update_transfer_function(self, zeros, poles):
+    def update_transfer_function(self, zeros, poles, H_combined=None):
         """
         Updates the transfer function plot.
         """
-        H, omega, H_dc = self.compute_transfer_function(False, zeros, poles)
+
+        if H_combined is None:
+            H, omega, H_dc = self.compute_transfer_function(False, zeros, poles)
+        else:
+            H = H_combined
+            omega = np.linspace(0, np.pi, 500)
+            H_dc = np.abs(H[0])
+
+        # H, omega, H_dc = self.compute_transfer_function(False, zeros, poles)
+
         magnitude = np.abs(H)/H_dc
         phase = np.angle(H)
 
