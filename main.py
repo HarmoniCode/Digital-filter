@@ -951,7 +951,7 @@ class TransferFunctionCanvas(FigureCanvas):
         print(f"b_coeff: {self.b_coeffs}")
         print(f"a_coeff: {self.a_coeffs}")
         if c_code == True:
-           return self.z_plane_canvas.b_coeffs, self.z_plane_canvas.a_coeffs
+           return self.b_coeffs, self.a_coeffs
         else:
            return H, omega, H_dc
 
