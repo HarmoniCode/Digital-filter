@@ -6,8 +6,9 @@ import csv
 
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
-    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,QFrame,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy
+    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QFrame,
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox,
+    QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QMessageBox
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
@@ -23,6 +24,9 @@ from scipy.signal import butter, cheby1, bessel, ellip, tf2zpk, zpk2tf
 class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
     def __init__(self):
         super().__init__()
+        self.gain = 1
+        self.apf_poles = []
+        self.apf_zeros = []
         self.graphs_window = None
         self.fig, self.ax = plt.subplots(figsize=(4, 4))
         self.ax.axis('off')
@@ -400,63 +404,69 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
             self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
             
             self.z_plane_canvas.plot_z_plane(self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
+
+    from PyQt5.QtWidgets import QMessageBox
+
     def generate_c_code(self):
-        b,a = TransferFunctionCanvas.compute_transfer_function(self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
+        b, a = TransferFunctionCanvas.compute_transfer_function(
+            self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles
+        )
         c_template = Template("""
-                    #include <stdio.h>
+        #include <stdio.h>
 
-                    #define N {{ num_order }}  // Order of numerator (b coefficients)
-                    #define M {{ den_order }}  // Order of denominator (a coefficients)
+        #define N {{ num_order }}  // Order of numerator (b coefficients)
+        #define M {{ den_order }}  // Order of denominator (a coefficients)
 
-                    // Filter coefficients
-                    double b[N+1] = { {{ b_coeffs }} };  // Numerator coefficients
-                    double a[M+1] = { {{ a_coeffs }} };  // Denominator coefficients
+        // Filter coefficients
+        double b[N+1] = { {{ b_coeffs }} };  // Numerator coefficients
+        double a[M+1] = { {{ a_coeffs }} };  // Denominator coefficients
 
-                    // Apply filter to input signal
-                    void apply_filter(double *input, double *output, int length) {
-                        double x[N+1] = {0};  // Delay buffer for input
-                        double y[M+1] = {0};  // Delay buffer for output
+        // Apply filter to input signal
+        void apply_filter(double *input, double *output, int length) {
+            double x[N+1] = {0};  // Delay buffer for input
+            double y[M+1] = {0};  // Delay buffer for output
 
-                        for (int n = 0; n < length; n++) {
-                            x[0] = input[n];  // Newest input sample
+            for (int n = 0; n < length; n++) {
+                x[0] = input[n];  // Newest input sample
 
-                            // Compute output using difference equation
-                            output[n] = 0;
-                            for (int i = 0; i <= N; i++) {
-                                output[n] += b[i] * x[i];
-                            }
-                            for (int j = 1; j <= M; j++) {
-                                output[n] -= a[j] * y[j];
-                            }
+                // Compute output using difference equation
+                output[n] = 0;
+                for (int i = 0; i <= N; i++) {
+                    output[n] += b[i] * x[i];
+                }
+                for (int j = 1; j <= M; j++) {
+                    output[n] -= a[j] * y[j];
+                }
 
-                            // Update delay buffers (shift values)
-                            for (int i = N; i > 0; i--) {
-                                x[i] = x[i-1];
-                            }
-                            for (int j = M; j > 0; j--) {
-                                y[j] = y[j-1];
-                            }
+                // Update delay buffers (shift values)
+                for (int i = N; i > 0; i--) {
+                    x[i] = x[i-1];
+                }
+                for (int j = M; j > 0; j--) {
+                    y[j] = y[j-1];
+                }
 
-                            y[0] = output[n];  // Store new output sample
-                        }
-                    }
+                y[0] = output[n];  // Store new output sample
+            }
+        }
 
-                    int main() {
-                        double input_signal[10] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-                        double output_signal[10];
+        int main() {
+            double input_signal[10] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            double output_signal[10];
 
-                        apply_filter(input_signal, output_signal, 10);
+            apply_filter(input_signal, output_signal, 10);
 
-                        // Print output
-                        printf("Filtered Output: ");
-                        for (int i = 0; i < 10; i++) {
-                            printf("%f ", output_signal[i]);
-                        }
-                        printf("\\n");
+            // Print output
+            printf("Filtered Output: ");
+            for (int i = 0; i < 10; i++) {
+                printf("%f ", output_signal[i]);
+            }
+            printf("\\n");
 
-                        return 0;
-                    }
-                    """)
+            return 0;
+        }
+        """)
+
         c_code = c_template.render(
             num_order=len(b) - 1,
             den_order=len(a) - 1,
@@ -464,26 +474,44 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
             a_coeffs=", ".join(map(str, a))
         )
 
+        # Write the generated code to a .c file
+        file_name = "filter_design.c"
+        with open(file_name, "w") as c_file:
+            c_file.write(c_code)
+        print(f"C code has been generated and saved to {file_name}.")
 
+        # Display the code in a pop-up window
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Generated C Code")
+        msg_box.setText("The C code has been generated successfully.")
+        msg_box.setDetailedText(c_code)  # Show full C code in a details section
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
 
-        print(c_code)
     def update_chosen_apf(self, apf_type):
             apf_type = self.apf_dropdown.currentText()
-            combined_zeros =[]
-            combined_poles = []
+            # combined_zeros =[]
+            # combined_poles = []
             if apf_type != "Choose All-Pass Filter":
                 b, a = self.all_pass_filters[apf_type]
-                apf_zeros, apf_poles, gain = tf2zpk(b, a)
-                apf_zeros = apf_zeros.tolist()
-                apf_poles = apf_poles.tolist()
-                combined_zeros = self.z_plane_canvas.zeros + apf_zeros
-                combined_poles = self.z_plane_canvas.poles + apf_poles
+                # apf_zeros, apf_poles, gain = tf2zpk(b, a)
+                zeros, poles, system_gain = tf2zpk(b, a)
+
+                # Append to existing lists
+                self.apf_zeros.extend(zeros)  # Append zeros to the existing list
+                self.apf_poles.extend(poles)  # Append poles to the existing list
+                self.gain *= system_gain  # Append the gain to the existing list
+
+                # self.apf_zeros = self.apf_zeros.tolist()
+                # self.apf_poles = self.apf_poles.tolist()
+                combined_zeros = self.z_plane_canvas.zeros + self.apf_zeros
+                combined_poles = self.z_plane_canvas.poles + self.apf_poles
                 print(f"combined Zeros of this {apf_type} filter are: {combined_zeros}")
-                print(f"zeros of this {apf_type} filter are: {apf_zeros}")
+                print(f"zeros of this {apf_type} filter are: {self.apf_zeros}")
                 print(f"combined Poles of this {apf_type} filter are: {combined_poles}")
-                print(f"poles of this {apf_type} filter are: {apf_poles}")
+                print(f"poles of this {apf_type} filter are: {self.apf_poles}")
                 self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
-                self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, gain)
+                self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, self.gain)
     def select_form(self):
         form_type = self.form_dropdown.currentText()
         if form_type == "Direct Form II":
