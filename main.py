@@ -17,7 +17,7 @@ from matplotlib.backends.backend_qt5agg import (
 import matplotlib.pyplot as plt
 import pandas as pd
 import pyqtgraph as pg
-from scipy.signal import butter, cheby1, bessel, ellip, tf2zpk, zpk2tf
+from scipy.signal import butter, cheby1, bessel, ellip, tf2zpk, zpk2tf, zpk2sos
 
 
 class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
@@ -68,9 +68,9 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         # left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
 
         self.direct_form_ii_widget = QFrame()
-        self.direct_form_ii_layout = QVBoxLayout(self.direct_form_ii_widget)
+        self.form_layout = QVBoxLayout(self.direct_form_ii_widget)
         self.form_canvas = FigureCanvas(self.fig)
-        self.direct_form_ii_layout.addWidget(self.form_canvas)
+        self.form_layout.addWidget(self.form_canvas)
 
         bottom_splitter = QSplitter(Qt.Vertical)
 
@@ -169,7 +169,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.buttons_layout.addWidget(self.generate_code_button)
 
         self.clear_form_buttons = QPushButton("Clear Form")
-        self.clear_form_buttons.clicked.connect(self.clear_direct_form_ii_widget)
+        self.clear_form_buttons.clicked.connect(self.clear_form_widget)
         self.buttons_layout.addWidget(self.clear_form_buttons)
 
         self.filter_dropdown = QComboBox()
@@ -236,10 +236,10 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         
 
 
-    def clear_direct_form_ii_widget(self):
+    def clear_form_widget(self):
         
-        while self.direct_form_ii_layout.count():
-            item = self.direct_form_ii_layout.takeAt(0)
+        while self.form_layout.count():
+            item = self.form_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -249,7 +249,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.ax.axis('off') 
         
         self.form_canvas = FigureCanvas(self.fig)
-        self.direct_form_ii_layout.addWidget(self.form_canvas)
+        self.form_layout.addWidget(self.form_canvas)
         self.form_canvas.draw()
 
     def create_standard_filter_library(self):
@@ -485,12 +485,13 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
                 self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
                 self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, gain)
     def select_form(self):
+        self.clear_form_widget()
         form_type = self.form_dropdown.currentText()
         if form_type == "Direct Form II":
             self.show_direct_form_II(self.transfer_function_canvas.b_coeffs, self.transfer_function_canvas.a_coeffs)
         else:
             self.show_cascade_form(self.transfer_function_canvas.b_coeffs, self.transfer_function_canvas.a_coeffs)
-
+    
     def show_direct_form_II(self, b, a):
         b = b.tolist()
         a = a.tolist()        
@@ -504,52 +505,132 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
 
         for i in range(order):
+            # arrow segment and coefficient for input part
             if a[i] != 0:
-               
                 self.ax.arrow(0.6, 0.7 - (i * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
-                self.ax.text(0.45 , 0.72 - (i * 0.4), f"{a[i]:.2f}", fontsize=12, color="blue")
+                self.ax.text(0.45 , 0.72 - (i * 0.4), f"{a[i]:.2f}", fontsize=10, color="blue")
 
+            # arrow segment and coefficient for output part
             if b[i] != 0:
                 
                 self.ax.arrow(0.6, 0.7 - (i * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
-                self.ax.text(0.8 , 0.72 - (i * 0.4), f"{b[i]:.2f}", fontsize=12, color="blue")
-
+                self.ax.text(0.8 , 0.72 - (i * 0.4), f"{b[i]:.2f}", fontsize=10, color="blue")
             self.ax.arrow(0.6, 0.7 - (i * 0.4), 0, -0.2, head_width=0.02, head_length=0.02, fc="k", ec="k")
+     
+     # delay elements
             self.ax.text(0.6,  0.5 - (i *  0.4), r"$Z^{-1}$", fontsize=9, ha="center", va="center",
                     bbox=dict(boxstyle="square", facecolor="yellow"))
+   
+    # arrow segment after delay element
             self.ax.arrow(0.6, 0.4 - (i * 0.4), 0, -0.08, head_width=0.02, head_length=0.02, fc="k", ec="k")
-
+  
+   # arrow and coeffiecient for the last element of input part
         if a[order] != 0:
             self.ax.arrow(0.6, 0.7 - (order * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
-            self.ax.text(0.45 , 0.72 - (order * 0.4), f"{a[order]:.2f}", fontsize=12, color="blue")
+            self.ax.text(0.45 , 0.72 - (order * 0.4), f"{a[order]:.2f}", fontsize=10, color="blue")
+
+   # arrow and coeffiecient for the last element of output part
 
         if b[order] != 0:
             self.ax.arrow(0.6, 0.7 - (order * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
-            self.ax.text(0.8 , 0.72 - (order * 0.4), f"{b[order]:.2f}", fontsize=12, color="blue")
+            self.ax.text(0.8 , 0.72 - (order * 0.4), f"{b[order]:.2f}", fontsize=10, color="blue")
 
         
         for i in range(order):  
-                            
+           
+            # summation nodes and arrow segments for input part                
                 if a[i + 1] != 0:
                     self.ax.text(0.38 , 0.7 - (i * 0.4), "+", fontsize=10,
                             bbox=dict(boxstyle="circle", facecolor="cyan"))
                     self.ax.arrow(0.4, 0.32 - (i * 0.4), 0, 0.3, head_width=0.02, head_length=0.02, fc="k", ec="k")
+             
+             # summation nodes and arrow segments for input part                
                 if b[i+1] != 0:
                     self.ax.text(0.99 , 0.7 - (i * 0.4), "+", fontsize=10,
                             bbox=dict(boxstyle="circle", facecolor="cyan"))
                     
                     self.ax.arrow(1, 0.32 - (i * 0.4), 0, 0.3, head_width=0.02, head_length=0.02, fc="k", ec="k")
+      
+        # input arrow segment 
         self.ax.arrow(0.25, 0.7, 0.1, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
-        self.ax.arrow(1.24, 0.7, -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
-        self.ax.text(0.2, 0.7, "X [n]", fontsize=12, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
-        self.ax.text(1.26, 0.7, "Y [n]", fontsize=12, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
-        self.ax.set_xlim(-0.1, 1.3)
+       
+        # output arrow segment 
+        self.ax.arrow(1, 0.7, 0.13, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+      
+        self.ax.text(0.18, 0.7, "X [n]", fontsize=10, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
+     
+        self.ax.text(1.22, 0.7, "Y [n]", fontsize=10, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
+        # self.ax.set_xlim(-0.1, 1.3)
         self.ax.set_ylim(-1, 1)
         plt.title("Direct Form II Block Diagram")
         self.form_canvas.draw()
         
     def show_cascade_form(self, b, a):
-        pass
+        order = max(len(b.tolist()), len(a.tolist())) - 1
+        sos = zpk2sos(*tf2zpk(b, a))
+
+        for index, section in enumerate(sos):
+            # b0, b1, b2, a0, a1, a2 = section
+            if order > 0 :
+                for i in range(2):
+            # arrow segment and coefficient for input part
+                    if section[i+3] != 0:
+                        self.ax.arrow(0.6 + (index * 0.68), 0.7 - (i * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                        self.ax.text(0.45 + (index * 0.68) , 0.72 - (i * 0.4), f"{section[i+3]:.2f}", fontsize=10, color="blue")
+
+                    # arrow segment and coefficient for output part
+                    if section[i] != 0:
+                        
+                        self.ax.arrow(0.6 + (index * 0.68), 0.7 - (i * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                        self.ax.text(0.8 + (index * 0.68) , 0.72 - (i * 0.4), f"{section[i]:.2f}", fontsize=10, color="blue")
+                    self.ax.arrow(0.6 + (index * 0.68), 0.7 - (i * 0.4), 0, -0.2, head_width=0.02, head_length=0.02, fc="k", ec="k")
+            
+            # delay elements
+                    self.ax.text(0.6 + (index * 0.68),  0.5 - (i *  0.4), r"$Z^{-1}$", fontsize=9, ha="center", va="center",
+                            bbox=dict(boxstyle="square", facecolor="yellow"))
+        
+            # arrow segment after delay element
+                    self.ax.arrow(0.6 + (index * 0.68), 0.4 - (i * 0.4), 0, -0.08, head_width=0.02, head_length=0.02, fc="k", ec="k")
+        
+        # arrow and coeffiecient for the last element of input part
+                if section[5] != 0:
+                    self.ax.arrow(0.6 + (index * 0.68), 0.7 - (2 * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                    self.ax.text(0.45 + (index * 0.68) , 0.72 - (2 * 0.4), f"{section[5]:.2f}", fontsize=10, color="blue")
+
+        # arrow and coeffiecient for the last element of output part
+
+                if section[2] != 0:
+                    self.ax.arrow(0.6 + (index * 0.68), 0.7 - (2 * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                    self.ax.text(0.8 + (index * 0.68) , 0.72 - (2 * 0.4), f"{section[2]:.2f}", fontsize=10, color="blue")
+
+                
+                for i in range(2):  
+                
+                    # summation nodes and arrow segments for input part                
+                        if section[i + 4] != 0:
+                            self.ax.text(0.38 + (index * 0.68) , 0.7 - (i * 0.4), "+", fontsize=10,
+                                    bbox=dict(boxstyle="circle", facecolor="cyan"))
+                            self.ax.arrow(0.4 + (index * 0.68), 0.32 - (i * 0.4), 0, 0.3, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                    
+                    # summation nodes and arrow segments for output part                
+                        if section[i+1] != 0:
+                            self.ax.text(0.99 + (index * 0.68) , 0.7 - (i * 0.4), "+", fontsize=10,
+                                    bbox=dict(boxstyle="circle", facecolor="cyan"))
+                            
+                            self.ax.arrow(1 + (index * 0.68), 0.32 - (i * 0.4), 0, 0.3, head_width=0.02, head_length=0.02, fc="k", ec="k")
+                order -= 2
+                self.ax.arrow( 1 + (index * 0.68), 0.7, 0.05, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+        
+        # input arrow
+        self.ax.text(0.2, 0.7, "X [n]", fontsize=10, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
+        self.ax.arrow(0.25, 0.7, 0.1, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
+
+        self.ax.text(1 + ((sos.shape[0] - 1) * 0.8), 0.7, "Y [n]", fontsize=10, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
+        self.ax.set_ylim(-1, 1)
+        plt.title("Cascade Form Block Diagram")
+        self.form_canvas.draw()
+            
+            
 
 class ZPlaneCanvas(FigureCanvas):
     from PyQt5.QtCore import pyqtSignal
