@@ -185,15 +185,13 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         upper_left_layout.addWidget(self.filter_dropdown)
 
-        self.apf_dropdown = QComboBox()
-        self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
-        self.apf_dropdown.addItems([
-            "Custom APF", "All-Pass Filter 1", "All-Pass Filter 2", "All-Pass Filter 3", "All-Pass Filter 4"
-        ])
-        self.apf_dropdown.setCurrentIndex(0)
-        self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
-        self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
-        upper_left_layout.addWidget(self.apf_dropdown)
+        self.apf_checkboxes = []
+        for apf_name in self.all_pass_filters.keys():
+            checkbox = QCheckBox(apf_name)
+            checkbox.stateChanged.connect(self.update_chosen_apf)
+            self.apf_checkboxes.append(checkbox)
+            upper_left_layout.addWidget(checkbox)
+
 
         self.a_spinbox = QDoubleSpinBox()
         self.a_spinbox.setDisabled(True)
@@ -481,30 +479,24 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec_()
 
-    def update_chosen_apf(self, apf_type):
-        apf_type = self.apf_dropdown.currentText()
-        # combined_zeros =[]
-        # combined_poles = []
-        if apf_type != "Choose All-Pass Filter":
-            b, a = self.all_pass_filters[apf_type]
-            # apf_zeros, apf_poles, gain = tf2zpk(b, a)
-            zeros, poles, system_gain = tf2zpk(b, a)
+    def update_chosen_apf(self):
+        self.apf_zeros = []
+        self.apf_poles = []
+        self.gain = 1
 
-            # Append to existing lists
-            self.apf_zeros.extend(zeros)  # Append zeros to the existing list
-            self.apf_poles.extend(poles)  # Append poles to the existing list
-            self.gain *= system_gain  # Append the gain to the existing list
+        for checkbox in self.apf_checkboxes:
+            if checkbox.isChecked():
+                apf_type = checkbox.text()
+                b, a = self.all_pass_filters[apf_type]
+                zeros, poles, system_gain = tf2zpk(b, a)
+                self.apf_zeros.extend(zeros)
+                self.apf_poles.extend(poles)
+                self.gain *= system_gain
 
-            # self.apf_zeros = self.apf_zeros.tolist()
-            # self.apf_poles = self.apf_poles.tolist()
-            combined_zeros = self.z_plane_canvas.zeros + self.apf_zeros
-            combined_poles = self.z_plane_canvas.poles + self.apf_poles
-            print(f"combined Zeros of this {apf_type} filter are: {combined_zeros}")
-            print(f"zeros of this {apf_type} filter are: {self.apf_zeros}")
-            print(f"combined Poles of this {apf_type} filter are: {combined_poles}")
-            print(f"poles of this {apf_type} filter are: {self.apf_poles}")
-            self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
-            self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, self.gain)
+        combined_zeros = self.z_plane_canvas.zeros + self.apf_zeros
+        combined_poles = self.z_plane_canvas.poles + self.apf_poles
+        self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
+        self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, self.gain)
 
     def select_form(self):
         form_type = self.form_dropdown.currentText()
