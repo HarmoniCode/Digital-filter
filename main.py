@@ -6,8 +6,9 @@ import csv
 
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
-    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,QFrame,
-    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox, QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy
+    QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QFrame,
+    QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox,
+    QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QMessageBox
 )
 from PyQt5.QtCore import Qt, QTimer
 from matplotlib.backends.backend_qt5agg import (
@@ -23,6 +24,9 @@ from scipy.signal import butter, cheby1, bessel, ellip, tf2zpk, zpk2tf, zpk2sos
 class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
     def __init__(self):
         super().__init__()
+        self.gain = 1
+        self.apf_poles = []
+        self.apf_zeros = []
         self.graphs_window = None
         self.fig, self.ax = plt.subplots(figsize=(4, 4))
         self.ax.axis('off')
@@ -55,7 +59,6 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         splitter = QSplitter(Qt.Horizontal)
         self.main_layout.addWidget(splitter)
 
-
         right_frame = QFrame()
         right_frame.setObjectName("right_frame")
         right_layout = QVBoxLayout(right_frame)
@@ -67,14 +70,14 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         # left_layout.addWidget(NavigationToolbar(self.z_plane_canvas, self))
 
-        self.direct_form_ii_widget = QFrame()
-        self.form_layout = QVBoxLayout(self.direct_form_ii_widget)
+        self.form_widget = QFrame()
+        self.form_layout = QVBoxLayout(self.form_widget)
         self.form_canvas = FigureCanvas(self.fig)
         self.form_layout.addWidget(self.form_canvas)
 
         bottom_splitter = QSplitter(Qt.Vertical)
 
-        bottom_splitter.addWidget(self.direct_form_ii_widget)
+        bottom_splitter.addWidget(self.form_widget)
 
         self.coord_layout = QHBoxLayout()
         self.coord_layout.setSpacing(5)
@@ -104,7 +107,6 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         upper_layout.addWidget(upper_left_frame)
         upper_layout.addWidget(self.z_plane_canvas)
 
-
         upper_left_layout.addLayout(self.coord_layout)
 
         buttons_frame = QFrame()
@@ -113,7 +115,6 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.buttons_layout = QVBoxLayout(buttons_frame)
         self.buttons_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self.buttons_layout.setSpacing(20)
-        
 
         # self.button_layout = QHBoxLayout()
 
@@ -168,9 +169,9 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.generate_code_button.clicked.connect(self.generate_c_code)
         self.buttons_layout.addWidget(self.generate_code_button)
 
-        self.clear_form_buttons = QPushButton("Clear Form")
-        self.clear_form_buttons.clicked.connect(self.clear_form_widget)
-        self.buttons_layout.addWidget(self.clear_form_buttons)
+        self.export_form_button = QPushButton("export Form")
+        self.export_form_button.clicked.connect(self.export_form)
+        self.buttons_layout.addWidget(self.export_form_button)
 
         self.filter_dropdown = QComboBox()
         self.filter_dropdown.insertItem(0, "Choose Standard Filter")
@@ -184,15 +185,13 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         upper_left_layout.addWidget(self.filter_dropdown)
 
-        self.apf_dropdown = QComboBox()
-        self.apf_dropdown.insertItem(0, "Choose All-Pass Filter")
-        self.apf_dropdown.addItems([
-            "Custom APF", "All-Pass Filter 1", "All-Pass Filter 2", "All-Pass Filter 3", "All-Pass Filter 4"
-        ])
-        self.apf_dropdown.setCurrentIndex(0)
-        self.apf_dropdown.currentIndexChanged.connect(self.update_chosen_apf)
-        self.apf_dropdown.currentIndexChanged.connect(self.toggle_a_spinbox)
-        upper_left_layout.addWidget(self.apf_dropdown)
+        self.apf_checkboxes = []
+        for apf_name in self.all_pass_filters.keys():
+            checkbox = QCheckBox(apf_name)
+            checkbox.stateChanged.connect(self.update_chosen_apf)
+            self.apf_checkboxes.append(checkbox)
+            upper_left_layout.addWidget(checkbox)
+
 
         self.a_spinbox = QDoubleSpinBox()
         self.a_spinbox.setDisabled(True)
@@ -204,17 +203,11 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
         self.form_dropdown = QComboBox()
         self.form_dropdown.addItems([
-             "Cascade Form", "Direct Form II"
+            "Direct Form II", "Cascade Form"
         ])
         self.form_dropdown.currentIndexChanged.connect(self.select_form)
-        
-        self.form_dropdown = QComboBox()
-        self.form_dropdown.addItems([
-             "Cascade Form", "Direct Form II"
-        ])
-        self.form_dropdown.currentIndexChanged.connect(self.select_form)
-        upper_left_layout.addWidget(self.form_dropdown) 
 
+        upper_left_layout.addWidget(self.form_dropdown)
 
         # right_pane = QWidget()
         # right_layout = QVBoxLayout(right_pane)
@@ -222,7 +215,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.transfer_function_canvas = TransferFunctionCanvas()
         # local_left_layout.addWidget(NavigationToolbar(self.transfer_function_canvas, self))
         bottom_splitter.addWidget(self.transfer_function_canvas)
-        right_layout.addWidget(bottom_splitter  )
+        right_layout.addWidget(bottom_splitter)
 
         splitter.addWidget(buttons_frame)
         splitter.addWidget(right_frame)
@@ -233,8 +226,6 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         )
         self.create_standard_filter_library()
         self.create_all_pass_filter_library()
-        
-
 
     def clear_form_widget(self):
         
@@ -243,11 +234,11 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-        
-        self.fig.clf()  
-        self.ax = self.fig.add_subplot(111)  
-        self.ax.axis('off') 
-        
+
+        self.fig.clf()
+        self.ax = self.fig.add_subplot(111)
+        self.ax.axis('off')
+
         self.form_canvas = FigureCanvas(self.fig)
         self.form_layout.addWidget(self.form_canvas)
         self.form_canvas.draw()
@@ -286,11 +277,12 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
             else:
                 pass
             self.standard_filters[filter_type] = (b, a)
+
     def update_custom_apf(self):
         a = self.a_spinbox.value()
         b, a_coeff = self.first_order_all_pass(a)
         self.all_pass_filters["Custom APF"] = (b, a_coeff)
-    
+
     def toggle_a_spinbox(self):
         if self.apf_dropdown.currentText() == "Custom APF":
             self.a_spinbox.setDisabled(False)
@@ -303,12 +295,12 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
                 a = 0.1
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-            
+
             elif "All-Pass Filter 1" in APF_filter_type:  # Second-Order All-Pass Filter
                 a = 0.2
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-            
+
             elif "All-Pass Filter 2" in APF_filter_type:  # Lattice All-Pass Filter
                 a = 0.4
                 b, a_coeff = self.first_order_all_pass(a)
@@ -318,17 +310,17 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
                 a = 0.6
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-            
+
             elif "All-Pass Filter 4" in APF_filter_type:  # Third-Order All-Pass Filter
                 a = 0.8
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-            
+
             # elif "Second Order APF" in APF_filter_type:  # Second-Order All-Pass Filter
             #     a = 0.5
             #     b, a_coeff = self.second_order_all_pass(a)
             #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-            
+
             # elif "Lattice APF" in APF_filter_type:  # Lattice All-Pass Filter
             #     a_coeffs = [0.7, 0.5]  
             #     b, a_coeff = self.lattice_all_pass(a_coeffs)
@@ -392,71 +384,79 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         except ValueError:
             print("Invalid input. Please enter numeric values.")
 
+    def plot_z_plane(self):
+        self.z_plane_canvas.plot_z_plane(self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
+        self.clear_form_widget()
+        self.select_form()
+
     def select_filter(self):
         ZPlaneCanvas.save_state(self.z_plane_canvas)
         filter_type = self.filter_dropdown.currentText()
         if filter_type != "Choose Standard Filter":
             b, a = self.standard_filters[filter_type]
             self.z_plane_canvas.zeros, self.z_plane_canvas.poles = b.tolist(), a.tolist()
-            
-            self.z_plane_canvas.plot_z_plane(self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
+            self.plot_z_plane()
+
     def generate_c_code(self):
-        b,a = TransferFunctionCanvas.compute_transfer_function(self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles)
+        b, a = TransferFunctionCanvas.compute_transfer_function(
+            self.transfer_function_canvas, True, self.z_plane_canvas.zeros, self.z_plane_canvas.poles
+        )
         c_template = Template("""
-                    #include <stdio.h>
+        #include <stdio.h>
 
-                    #define N {{ num_order }}  // Order of numerator (b coefficients)
-                    #define M {{ den_order }}  // Order of denominator (a coefficients)
+        #define N {{ num_order }}  // Order of numerator (b coefficients)
+        #define M {{ den_order }}  // Order of denominator (a coefficients)
 
-                    // Filter coefficients
-                    double b[N+1] = { {{ b_coeffs }} };  // Numerator coefficients
-                    double a[M+1] = { {{ a_coeffs }} };  // Denominator coefficients
+        // Filter coefficients
+        double b[N+1] = { {{ b_coeffs }} };  // Numerator coefficients
+        double a[M+1] = { {{ a_coeffs }} };  // Denominator coefficients
 
-                    // Apply filter to input signal
-                    void apply_filter(double *input, double *output, int length) {
-                        double x[N+1] = {0};  // Delay buffer for input
-                        double y[M+1] = {0};  // Delay buffer for output
+        // Apply filter to input signal
+        void apply_filter(double *input, double *output, int length) {
+            double x[N+1] = {0};  // Delay buffer for input
+            double y[M+1] = {0};  // Delay buffer for output
 
-                        for (int n = 0; n < length; n++) {
-                            x[0] = input[n];  // Newest input sample
+            for (int n = 0; n < length; n++) {
+                x[0] = input[n];  // Newest input sample
 
-                            // Compute output using difference equation
-                            output[n] = 0;
-                            for (int i = 0; i <= N; i++) {
-                                output[n] += b[i] * x[i];
-                            }
-                            for (int j = 1; j <= M; j++) {
-                                output[n] -= a[j] * y[j];
-                            }
+                // Compute output using difference equation
+                output[n] = 0;
+                for (int i = 0; i <= N; i++) {
+                    output[n] += b[i] * x[i];
+                }
+                for (int j = 1; j <= M; j++) {
+                    output[n] -= a[j] * y[j];
+                }
 
-                            // Update delay buffers (shift values)
-                            for (int i = N; i > 0; i--) {
-                                x[i] = x[i-1];
-                            }
-                            for (int j = M; j > 0; j--) {
-                                y[j] = y[j-1];
-                            }
+                // Update delay buffers (shift values)
+                for (int i = N; i > 0; i--) {
+                    x[i] = x[i-1];
+                }
+                for (int j = M; j > 0; j--) {
+                    y[j] = y[j-1];
+                }
 
-                            y[0] = output[n];  // Store new output sample
-                        }
-                    }
+                y[0] = output[n];  // Store new output sample
+            }
+        }
 
-                    int main() {
-                        double input_signal[10] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-                        double output_signal[10];
+        int main() {
+            double input_signal[10] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            double output_signal[10];
 
-                        apply_filter(input_signal, output_signal, 10);
+            apply_filter(input_signal, output_signal, 10);
 
-                        // Print output
-                        printf("Filtered Output: ");
-                        for (int i = 0; i < 10; i++) {
-                            printf("%f ", output_signal[i]);
-                        }
-                        printf("\\n");
+            // Print output
+            printf("Filtered Output: ");
+            for (int i = 0; i < 10; i++) {
+                printf("%f ", output_signal[i]);
+            }
+            printf("\\n");
 
-                        return 0;
-                    }
-                    """)
+            return 0;
+        }
+        """)
+
         c_code = c_template.render(
             num_order=len(b) - 1,
             den_order=len(a) - 1,
@@ -464,26 +464,50 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
             a_coeffs=", ".join(map(str, a))
         )
 
+        # Write the generated code to a .c file
+        file_name = "filter_design.c"
+        with open(file_name, "w") as c_file:
+            c_file.write(c_code)
+        print(f"C code has been generated and saved to {file_name}.")
 
+        # Display the code in a pop-up window
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Generated C Code")
+        msg_box.setText("The C code has been generated successfully.")
+        msg_box.setDetailedText(c_code)  # Show full C code in a details section
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
 
-        print(c_code)
-    def update_chosen_apf(self, apf_type):
-            apf_type = self.apf_dropdown.currentText()
-            combined_zeros =[]
-            combined_poles = []
-            if apf_type != "Choose All-Pass Filter":
+    def update_chosen_apf(self):
+        self.apf_zeros = []
+        self.apf_poles = []
+        self.gain = 1
+
+        for checkbox in self.apf_checkboxes:
+            if checkbox.isChecked():
+                apf_type = checkbox.text()
                 b, a = self.all_pass_filters[apf_type]
-                apf_zeros, apf_poles, gain = tf2zpk(b, a)
-                apf_zeros = apf_zeros.tolist()
-                apf_poles = apf_poles.tolist()
-                combined_zeros = self.z_plane_canvas.zeros + apf_zeros
-                combined_poles = self.z_plane_canvas.poles + apf_poles
-                print(f"combined Zeros of this {apf_type} filter are: {combined_zeros}")
-                print(f"zeros of this {apf_type} filter are: {apf_zeros}")
-                print(f"combined Poles of this {apf_type} filter are: {combined_poles}")
-                print(f"poles of this {apf_type} filter are: {apf_poles}")
-                self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
-                self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, gain)
+                zeros, poles, system_gain = tf2zpk(b, a)
+                self.apf_zeros.extend(zeros)
+                self.apf_poles.extend(poles)
+                self.gain *= system_gain
+
+        combined_zeros = self.z_plane_canvas.zeros + self.apf_zeros
+        combined_poles = self.z_plane_canvas.poles + self.apf_poles
+        self.z_plane_canvas.plot_z_plane(combined_zeros, combined_poles)
+        self.transfer_function_canvas.update_transfer_function(combined_zeros, combined_poles, self.gain)
+
+    def export_form(self):  
+        form_type = self.form_dropdown.currentText()
+        file_path = f"{form_type} Diagram.png"
+        if file_path:
+            self.fig.savefig(file_path)
+        
+        msg_box = QMessageBox()
+        msg_box.setWindowTitle("Export Form")
+        msg_box.setText(f"The {form_type} diagram has been exported successfully.")
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
     def select_form(self):
         self.clear_form_widget()
         form_type = self.form_dropdown.currentText()
@@ -494,25 +518,23 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
     
     def show_direct_form_II(self, b, a):
         b = b.tolist()
-        a = a.tolist()        
+        a = a.tolist()
         if len(b) < len(a):
             for _ in range(len(a) - len(b)):
-                b.append(0) 
+                b.append(0)
         elif len(a) < len(b):
             for _ in range(len(b) - len(a)):
                 a.append(0)
-        order = len(b) - 1 
-
+        order = len(b) - 1
 
         for i in range(order):
             # arrow segment and coefficient for input part
-            if a[i] != 0:
+            if (a[i]) != 0:
                 self.ax.arrow(0.6, 0.7 - (i * 0.4), -0.18, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
                 self.ax.text(0.45 , 0.72 - (i * 0.4), f"{a[i]:.2f}", fontsize=10, color="blue")
 
             # arrow segment and coefficient for output part
-            if b[i] != 0:
-                
+            if (b[i]) != 0:
                 self.ax.arrow(0.6, 0.7 - (i * 0.4), 0.38, 0, head_width=0.02, head_length=0.02, fc="k", ec="k")
                 self.ax.text(0.8 , 0.72 - (i * 0.4), f"{b[i]:.2f}", fontsize=10, color="blue")
             self.ax.arrow(0.6, 0.7 - (i * 0.4), 0, -0.2, head_width=0.02, head_length=0.02, fc="k", ec="k")
@@ -562,7 +584,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.ax.text(1.22, 0.7, "Y [n]", fontsize=10, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
         # self.ax.set_xlim(-0.1, 1.3)
         self.ax.set_ylim(-1, 1)
-        plt.title("Direct Form II Block Diagram")
+        self.ax.set_title("Direct Form II Block Diagram")
         self.form_canvas.draw()
         
     def show_cascade_form(self, b, a):
@@ -570,7 +592,6 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         sos = zpk2sos(*tf2zpk(b, a))
 
         for index, section in enumerate(sos):
-            # b0, b1, b2, a0, a1, a2 = section
             if order > 0 :
                 for i in range(2):
             # arrow segment and coefficient for input part
@@ -627,16 +648,16 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
         self.ax.text(1 + ((sos.shape[0] - 1) * 0.8), 0.7, "Y [n]", fontsize=10, ha="center", bbox=dict(boxstyle="round", facecolor="lightblue"))
         self.ax.set_ylim(-1, 1)
-        plt.title("Cascade Form Block Diagram")
+        self.ax.set_title("Cascade Form Block Diagram")
         self.form_canvas.draw()
             
             
+
 
 class ZPlaneCanvas(FigureCanvas):
     from PyQt5.QtCore import pyqtSignal
 
     transfer_function_updated = pyqtSignal(list, list)
-
     def __init__(self):
         self.selected_conjugate = None
         self.selected = None
@@ -678,10 +699,9 @@ class ZPlaneCanvas(FigureCanvas):
     #     #print(self.poles)
     #     self.draw()
     #     self.transfer_function_updated.emit(self.zeros, self.poles)
-    
-    def plot_z_plane(self,zeros,poles):
-        self.ax.clear()
 
+    def plot_z_plane(self, zeros, poles):
+        self.ax.clear()
         theta = np.linspace(0, 2 * np.pi, 100)
         self.ax.plot(np.cos(theta), np.sin(theta), "b--", label="Unit Circle")
 
@@ -696,14 +716,14 @@ class ZPlaneCanvas(FigureCanvas):
         if self.poles:
             self.ax.plot([p.real for p in poles], [p.imag for p in poles], "rx", label="Poles")
 
-        self.ax.legend()
+        # self.ax.legend()
         #print("Current existing zeroes:")
         #print(self.zeros)
         #print("Current existing poles:")
         #print(self.poles)
         self.draw()
         self.transfer_function_updated.emit(self.zeros, self.poles)
-    
+
     def on_click(self, event):
         if event.inaxes != self.ax:
             return
@@ -898,9 +918,8 @@ class ZPlaneCanvas(FigureCanvas):
                 "rx", markersize=8, zorder=2,
             )
 
-        self.ax.legend()
+        # self.ax.legend()
         self.draw()
-
 
 
 class TransferFunctionCanvas(FigureCanvas):
@@ -912,9 +931,10 @@ class TransferFunctionCanvas(FigureCanvas):
         self.z_plane_canvas = ZPlaneCanvas()
         self.b_coeffs = None
         self.a_coeffs = None
+
     def plot_initial(self):
         self.ax_mag.set_title("Magnitude of Transfer Function")
-        self.ax_mag.set_xlabel("Frequency (rad/s)")
+
         self.ax_mag.set_ylabel("Magnitude")
         self.ax_mag.grid(True)
 
@@ -943,11 +963,11 @@ class TransferFunctionCanvas(FigureCanvas):
         H = Y_Z / X_Z
         self.b_coeffs, self.a_coeffs = zpk2tf(zeros, poles, 1)
         if c_code == True:
-           return self.b_coeffs, self.a_coeffs
+            return self.b_coeffs, self.a_coeffs
         else:
-           return H, omega
+            return H, omega
 
-    def update_transfer_function(self, zeros, poles, gain = 1):
+    def update_transfer_function(self, zeros, poles, gain=1):
         """
         Updates the transfer function plot.
         """
@@ -960,7 +980,7 @@ class TransferFunctionCanvas(FigureCanvas):
 
         self.ax_mag.plot(omega, magnitude, label="|H(z)|", color="blue")
         self.ax_mag.set_title("Magnitude of Transfer Function")
-        self.ax_mag.set_xlabel("Frequency (rad/s)")
+
         self.ax_mag.set_ylabel("Magnitude")
         self.ax_mag.grid(True)
 
@@ -1023,7 +1043,6 @@ class GraphsWindow(QWidget):
         self.filtered_plot.setLabel("bottom", "Time")
         self.filtered_plot.setLabel("left", "Amplitude")
         main_layout.addWidget(self.filtered_plot)
-
 
         H_layout = QHBoxLayout()
         H_layout.addSpacerItem(
@@ -1153,10 +1172,9 @@ class GraphsWindow(QWidget):
         else:
             self.timer.stop()
 
-
     def update_H(self, zeros, poles):
         """Compute the transfer function."""
-        transfer_function_freq= self.transfer_function_canvas.compute_transfer_function(False, zeros, poles)[0]
+        transfer_function_freq = self.transfer_function_canvas.compute_transfer_function(False, zeros, poles)[0]
         transfer_function_time = np.fft.ifft(transfer_function_freq).real
         return transfer_function_time
 
@@ -1180,6 +1198,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.graphs_window)
 
         self.main_layout.addWidget(splitter)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
