@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox,
     QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QMessageBox
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QLocale
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
     # NavigationToolbar2QT as NavigationToolbar
@@ -186,15 +186,22 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         upper_left_layout.addWidget(self.filter_dropdown)
 
         self.apf_checkboxes = []
-        for apf_name in self.all_pass_filters.keys():
+        custom_apf_checkbox = QCheckBox("Custom APF")
+        custom_apf_checkbox.stateChanged.connect(self.toggle_a_spinbox)
+        self.apf_checkboxes.append(custom_apf_checkbox)
+        upper_left_layout.addWidget(custom_apf_checkbox)
+        for apf_name in list(self.all_pass_filters.keys())[1:]:
             checkbox = QCheckBox(apf_name)
             checkbox.stateChanged.connect(self.update_chosen_apf)
             self.apf_checkboxes.append(checkbox)
             upper_left_layout.addWidget(checkbox)
+            
 
 
         self.a_spinbox = QDoubleSpinBox()
         self.a_spinbox.setDisabled(True)
+        self.a_spinbox.setLocale(QLocale(QLocale.Language.English))
+
         self.a_spinbox.setRange(0.1, 0.9)  # Set the range of values (min, max)
         self.a_spinbox.setValue(0.1)  # Set the initial value
         self.a_spinbox.setSingleStep(0.1)
@@ -282,54 +289,40 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         a = self.a_spinbox.value()
         b, a_coeff = self.first_order_all_pass(a)
         self.all_pass_filters["Custom APF"] = (b, a_coeff)
+        self.update_chosen_apf()
 
     def toggle_a_spinbox(self):
-        if self.apf_dropdown.currentText() == "Custom APF":
+        if  self.apf_checkboxes[0].isChecked():
             self.a_spinbox.setDisabled(False)
         else:
             self.a_spinbox.setDisabled(True)
-
+        self.update_chosen_apf()
     def create_all_pass_filter_library(self):
         for APF_filter_type in self.all_pass_filters.keys():
-            if "Custom APF" in APF_filter_type:  # First-Order All-Pass Filter
+            if "Custom APF" in APF_filter_type:  
                 a = 0.1
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
 
-            elif "All-Pass Filter 1" in APF_filter_type:  # Second-Order All-Pass Filter
+            elif "All-Pass Filter 1" in APF_filter_type:  
                 a = 0.2
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
 
-            elif "All-Pass Filter 2" in APF_filter_type:  # Lattice All-Pass Filter
+            elif "All-Pass Filter 2" in APF_filter_type:  
                 a = 0.4
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
 
-            elif "All-Pass Filter 3" in APF_filter_type:  # Third-Order All-Pass Filter
+            elif "All-Pass Filter 3" in APF_filter_type:  
                 a = 0.6
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
 
-            elif "All-Pass Filter 4" in APF_filter_type:  # Third-Order All-Pass Filter
+            elif "All-Pass Filter 4" in APF_filter_type:  
                 a = 0.8
                 b, a_coeff = self.first_order_all_pass(a)
                 self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-
-            # elif "Second Order APF" in APF_filter_type:  # Second-Order All-Pass Filter
-            #     a = 0.5
-            #     b, a_coeff = self.second_order_all_pass(a)
-            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-
-            # elif "Lattice APF" in APF_filter_type:  # Lattice All-Pass Filter
-            #     a_coeffs = [0.7, 0.5]  
-            #     b, a_coeff = self.lattice_all_pass(a_coeffs)
-            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
-
-            # elif "Third Order APF" in APF_filter_type:  # Third-Order All-Pass Filter
-            #     a0, a1, a2 = 0.5, 0.7, 0.9 
-            #     b, a_coeff = self.third_order_all_pass(a0, a1, a2)
-            #     self.all_pass_filters[APF_filter_type] = (b, a_coeff)
 
     def first_order_all_pass(self, a):
         # First-order All-Pass Filter transfer function: H(z) = (z^-1 - a) / (1 - a * z^-1)
@@ -337,27 +330,7 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         a_coeff = [1, a]  # Denominator coefficients
         return b, a_coeff
 
-    # def second_order_all_pass(self, a):
-    #     # Second-order All-Pass Filter transfer function: H(z) = (z^-2 - 2a * z^-1 + 1) / (z^-2 + 2a * z^-1 + 1)
-    #     b = [1, -2*a, 1]
-    #     a_coeff = [1, 2*a, 1]
-    #     return b, a_coeff
-
-    # def lattice_all_pass(self, a_coeffs):
-    #     # Lattice All-Pass Filter: Cascading second-order sections
-    #     b_all, a_all = [], []
-    #     for a in a_coeffs:
-    #         b, a_coeff = self.second_order_all_pass(a)
-    #         b_all.extend(b)                 
-    #         a_all.extend(a_coeff)
-    #     return b_all, a_all
-
-    # def third_order_all_pass(self, a0, a1, a2):
-    #     # Transfer function: H(z) = (z^-3 - a2*z^-2 + a1*z^-1 - a0) / (z^-3 + a0*z^-2 + a1*z^-1 + a2)
-    #     b = [1, -a2, a1, -a0]
-    #     a_coeff = [1, a0, a1, a2]
-    #     return b, a_coeff
-
+    
     def update_add_conjugate_button(self):
         self.selected_conjugate = self.z_plane_canvas.selected_conjugate
         if self.selected_conjugate is None:
@@ -675,31 +648,6 @@ class ZPlaneCanvas(FigureCanvas):
         self.mpl_connect("motion_notify_event", self.on_drag)
         self.mpl_connect("button_release_event", self.on_release)
 
-    # def plot_z_plane(self):
-    #     self.ax.clear()
-
-    #     theta = np.linspace(0, 2 * np.pi, 100)
-    #     self.ax.plot(np.cos(theta), np.sin(theta), "b--", label="Unit Circle")
-
-    #     self.ax.axhline(0, color="black", linewidth=0.5)
-    #     self.ax.axvline(0, color="black", linewidth=0.5)
-    #     self.ax.set_xlim(-1.5, 1.5)
-    #     self.ax.set_ylim(-1.5, 1.5)
-    #     self.ax.set_aspect("equal", adjustable="box")
-
-    #     if self.zeros:
-    #         self.ax.plot([z.real for z in self.zeros], [z.imag for z in self.zeros], "go", label="Zeros")
-    #     if self.poles:
-    #         self.ax.plot([p.real for p in self.poles], [p.imag for p in self.poles], "rx", label="Poles")
-
-    #     self.ax.legend()
-    #     #print("Current existing zeroes:")
-    #     #print(self.zeros)
-    #     #print("Current existing poles:")
-    #     #print(self.poles)
-    #     self.draw()
-    #     self.transfer_function_updated.emit(self.zeros, self.poles)
-
     def plot_z_plane(self, zeros, poles):
         self.ax.clear()
         theta = np.linspace(0, 2 * np.pi, 100)
@@ -715,12 +663,7 @@ class ZPlaneCanvas(FigureCanvas):
             self.ax.plot([z.real for z in zeros], [z.imag for z in zeros], "go", label="Zeros")
         if self.poles:
             self.ax.plot([p.real for p in poles], [p.imag for p in poles], "rx", label="Poles")
-
-        # self.ax.legend()
-        #print("Current existing zeroes:")
-        #print(self.zeros)
-        #print("Current existing poles:")
-        #print(self.poles)
+            
         self.draw()
         self.transfer_function_updated.emit(self.zeros, self.poles)
 
@@ -767,7 +710,6 @@ class ZPlaneCanvas(FigureCanvas):
             return
 
         distances = [abs(complex(x, y) - p) for p in all_points]
-        #print(distances)
         if min(distances) < 0.05:
             closest_idx = np.argmin(distances)
             if closest_idx < len(self.zeros):
@@ -918,7 +860,6 @@ class ZPlaneCanvas(FigureCanvas):
                 "rx", markersize=8, zorder=2,
             )
 
-        # self.ax.legend()
         self.draw()
 
 
@@ -1010,7 +951,6 @@ class GraphsWindow(QWidget):
         self.mouse_timer.timeout.connect(self.update_mouse_signal)
         self.mouse_signal = []
 
-        # main_layout = QVBoxLayout()
         main_layout = QVBoxLayout()
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignCenter)
 
