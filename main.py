@@ -8,7 +8,7 @@ from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication, QFileDialog, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QFrame,
     QLineEdit, QLabel, QPushButton, QSplitter, QSlider, QRadioButton, QComboBox, QListWidget, QCheckBox,
-    QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QMessageBox
+    QAbstractItemView, QSpinBox, QDoubleSpinBox, QSpacerItem, QSizePolicy, QMessageBox,QTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, QLocale
 from matplotlib.backends.backend_qt5agg import (
@@ -28,7 +28,8 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.apf_poles = []
         self.apf_zeros = []
         self.graphs_window = None
-        self.fig, self.ax = plt.subplots(figsize=(4, 4))
+        self.fig, self.ax = plt.subplots(figsize=(6, 6))
+
         self.ax.axis('off')
 
         self.standard_filters = {
@@ -185,18 +186,23 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         self.filter_dropdown.currentIndexChanged.connect(self.select_filter)
         upper_left_layout.addWidget(self.filter_dropdown)
 
+        apf_frame=QFrame()
+        apf_layout=QVBoxLayout(apf_frame)
+        apf_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        
+        
         self.apf_checkboxes = []
         custom_apf_checkbox = QCheckBox("Custom APF")
         custom_apf_checkbox.stateChanged.connect(self.toggle_a_spinbox)
         self.apf_checkboxes.append(custom_apf_checkbox)
-        upper_left_layout.addWidget(custom_apf_checkbox)
+        apf_layout.addWidget(custom_apf_checkbox)
         for apf_name in list(self.all_pass_filters.keys())[1:]:
             checkbox = QCheckBox(apf_name)
             checkbox.stateChanged.connect(self.update_chosen_apf)
             self.apf_checkboxes.append(checkbox)
-            upper_left_layout.addWidget(checkbox)
+            apf_layout.addWidget(checkbox)
             
-
+        upper_left_layout.addWidget(apf_frame)
 
         self.a_spinbox = QDoubleSpinBox()
         self.a_spinbox.setDisabled(True)
@@ -377,12 +383,12 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
         c_template = Template("""
         #include <stdio.h>
 
-        #define N {{ num_order }}  // Order of numerator (b coefficients)
-        #define M {{ den_order }}  // Order of denominator (a coefficients)
+        #define N {{ num_order }}  
+        #define M {{ den_order }}  
 
-        // Filter coefficients
-        double b[N+1] = { {{ b_coeffs }} };  // Numerator coefficients
-        double a[M+1] = { {{ a_coeffs }} };  // Denominator coefficients
+        
+        double b[N+1] = { {{ b_coeffs }} };  
+        double a[M+1] = { {{ a_coeffs }} };  
 
         // Apply filter to input signal
         void apply_filter(double *input, double *output, int length) {
@@ -419,7 +425,6 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
             apply_filter(input_signal, output_signal, 10);
 
-            // Print output
             printf("Filtered Output: ");
             for (int i = 0; i < 10; i++) {
                 printf("%f ", output_signal[i]);
@@ -445,9 +450,21 @@ class ZPlanePlotApp(QWidget):  # Change from QMainWindow to QWidget
 
         # Display the code in a pop-up window
         msg_box = QMessageBox()
+        msg_box.setSizeGripEnabled(True)
+        msg_box.setStyleSheet("QLabel{min-width: 700px;}")
         msg_box.setWindowTitle("Generated C Code")
         msg_box.setText("The C code has been generated successfully.")
-        msg_box.setDetailedText(c_code)  # Show full C code in a details section
+
+        # Create a QTextEdit for detailed text
+        text_edit = QTextEdit()
+        text_edit.setPlainText(c_code)
+        text_edit.setMinimumHeight(300)
+        text_edit.setReadOnly(True)
+
+        # Add the QTextEdit to the message box layout
+        layout = msg_box.layout()
+        layout.addWidget(text_edit, layout.rowCount(), 0, 1, layout.columnCount())
+
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec_()
 
@@ -964,9 +981,17 @@ class GraphsWindow(QWidget):
         button_layout.addWidget(self.radio_mouse)
         main_layout.addLayout(button_layout)
 
+        H_button_layout = QHBoxLayout()
+
         self.input_button = QPushButton("Load Signal")
         self.input_button.clicked.connect(self.load_signal)
-        main_layout.addWidget(self.input_button)
+        H_button_layout.addWidget(self.input_button)
+
+        self.clear_button = QPushButton("Clear Graphs")
+        self.clear_button.clicked.connect(self.clear_graphs)
+        H_button_layout.addWidget(self.clear_button)
+
+        main_layout.addLayout(H_button_layout)
 
         self.temporal_resolution = QSlider(Qt.Horizontal)
         self.temporal_resolution.setMinimum(1)
@@ -974,15 +999,20 @@ class GraphsWindow(QWidget):
         self.temporal_resolution.setValue(50)
         main_layout.addWidget(self.temporal_resolution)
 
+        plot_frame = QFrame()
+        plot_layout = QVBoxLayout(plot_frame)
+
         self.input_plot = pg.PlotWidget(title="Input Signal")
         self.input_plot.setLabel("bottom", "Time")
         self.input_plot.setLabel("left", "Amplitude")
-        main_layout.addWidget(self.input_plot)
+        plot_layout.addWidget(self.input_plot)
 
         self.filtered_plot = pg.PlotWidget(title="Filtered Signal")
         self.filtered_plot.setLabel("bottom", "Time")
         self.filtered_plot.setLabel("left", "Amplitude")
-        main_layout.addWidget(self.filtered_plot)
+        plot_layout.addWidget(self.filtered_plot)
+
+        main_layout.addWidget(plot_frame)
 
         H_layout = QHBoxLayout()
         H_layout.addSpacerItem(
@@ -1012,6 +1042,15 @@ class GraphsWindow(QWidget):
         main_layout.addLayout(H_layout)
 
         self.setLayout(main_layout)
+
+    def clear_graphs(self):
+        """Clear the input and filtered plots."""
+        self.input_plot.clear()
+        self.filtered_plot.clear()
+        self.mouse_signal = []
+        self.data = None
+        self.input_current_index = 0
+        self.filtered_current_index = 0
 
     #########################################################################################################################################################################
     #Mouse Plotting
@@ -1059,6 +1098,8 @@ class GraphsWindow(QWidget):
 
             self.filtered_plot.clear()
             self.filtered_plot.plot(time, filtered_signal, pen="r", clear=True)
+            
+
 
     def update_mouse_signal(self):
         """Update the input plot with the mouse-drawn signal."""
