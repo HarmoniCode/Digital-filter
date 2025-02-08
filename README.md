@@ -14,6 +14,10 @@
 
 The Digital Filter Designer is a powerful application built using PyQt5 and Matplotlib. It allows users to design and visualize digital filters, including standard filters and all-pass filters, and generate corresponding C code. This tool is ideal for students, researchers, and engineers working in the field of digital signal processing.
 
+## Demo video
+https://drive.google.com/file/d/1P7x8AQ1tuT9XlT_HM9brPxJPCl7oTAro/view?usp=sharing
+
+
 ## Main Features
 
 - **Z-Plane Plotting**: Visualize zeros and poles on the Z-plane.
